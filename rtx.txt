@@ -92,7 +92,7 @@ TextLabel1.BackgroundTransparency = 0.89999997615814
 TextLabel1.Position = UDim2.new(0.219060361, 0, 0.755531549, 0)
 TextLabel1.Size = UDim2.new(0, 200, 0, 17)
 TextLabel1.Font = Enum.Font.SourceSans
-TextLabel1.Text = "credit im patrick"
+TextLabel1.Text = "Aku122"
 TextLabel1.TextColor3 = Color3.new(1, 1, 0)
 TextLabel1.TextSize = 14
 
