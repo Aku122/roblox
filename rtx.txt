@@ -132,7 +132,7 @@ Map.Text = "Winter"
 Map.TextColor3 = Color3.new(0, 1, 1)
 Map.TextSize = 14
 Map.MouseButton1Click:connect(function()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Aku122/roblox/winter.txt",true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Aku122/roblox/main/rtx/winter.txt",true))()
 end)
 
 Damage.Name = "Damage"
