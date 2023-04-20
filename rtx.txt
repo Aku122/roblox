@@ -118,7 +118,7 @@ Gravity.Text = "Night"
 Gravity.TextColor3 = Color3.new(0, 1, 1)
 Gravity.TextSize = 14
 Gravity.MouseButton1Down:connect(function()
-loadstring(game:HttpGet("https://pastebin.com/raw/MSZPFVfE",true))()
+loadstring(game:HttpGet("https://github.com/Aku122/roblox/blob/main/night.txt",true))()
 end)
 
 Map.Name = "Map"
@@ -132,7 +132,7 @@ Map.Text = "winter"
 Map.TextColor3 = Color3.new(0, 1, 1)
 Map.TextSize = 14
 Map.MouseButton1Click:connect(function()
-loadstring(game:HttpGet("https://pastebin.com/raw/KinYwgWN",true))()
+loadstring(game:HttpGet("https://github.com/Aku122/roblox/blob/main/winter.txt",true))()
 end)
 
 Damage.Name = "Damage"
@@ -146,7 +146,7 @@ Damage.Text = "Afternoon"
 Damage.TextColor3 = Color3.new(0, 1, 1)
 Damage.TextSize = 14
 Damage.MouseButton1Click:connect(function()
-loadstring(game:HttpGet("https://pastebin.com/raw/3ux41n4q",true))()
+loadstring(game:HttpGet("https://github.com/Aku122/roblox/blob/main/afternoon.txt",true))()
 end)
 
 Lobby.Name = "Lobby"
