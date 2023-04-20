@@ -1,8 +1,10 @@
 game.Lighting.ClockTime = 12
 
+local Blur = Instance.new("BlurEffect")
+
 local a = game.Lighting
 a.Ambient = Color3.fromRGB(33, 33, 33)
-a.Brightness = 5.69
+a.Brightness = 4.69
 a.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
 a.ColorShift_Top = Color3.fromRGB(255, 247, 237)
 a.EnvironmentDiffuseScale = 0.105
@@ -21,7 +23,8 @@ c.Brightness = 0.015
 c.Contrast = 0.25
 c.Enabled = true
 c.Saturation = 0.2
-c.TintColor = Color3.fromRGB(217, 145, 57)
+c.TintColor = Color3.fromRGB(255, 220, 148)
+Blur.Size = 5
 if getgenv().mode == "Summer" then
    c.TintColor = Color3.fromRGB(255, 220, 148)
 elseif getgenv().mode == "Autumn" then
