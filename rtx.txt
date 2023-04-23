@@ -154,7 +154,7 @@ Enhance.Name = "Enhance"
 Enhance.Parent = main
 Enhance.BackgroundColor3 = Color3.new(0, 0, 0)
 Enhance.BackgroundTransparency = 0.5
-Enhance.Position = UDim2.new(-0.00223019363, 0, 0.61813767, 0)
+Enhance.Position = UDim2.new(-0.00223019363, 0, 0.55813767, 0)
 Enhance.Size = UDim2.new(0, 170, 0, 47)
 Enhance.Font = Enum.Font.SourceSans
 Enhance.Text = "Enhance"
@@ -191,6 +191,15 @@ for i, v in pairs(Lighting:GetChildren()) do
 		v:Destroy()
 	end
 end
+
+Bloom.Parent = Lighting
+Blur.Parent = Lighting
+ColorCor.Parent = Lighting
+SunRays.Parent = Lighting
+Sky.Parent = Lighting
+Atm.Parent = Lighting
+Gui.Parent = StarterGui
+ShadowFrame.Parent = Gui
 end)
 
 Lobby.Name = "Lobby"
