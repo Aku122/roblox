@@ -160,7 +160,7 @@ Enhance.Text = "Enhance"
 Enhance.TextColor3 = Color3.new(0, 1, 1)
 Enhance.TextSize = 14
 Enhance.MouseButton1Down:connect(function()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Aku122/roblox/main/rtx/night.txt",true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Aku122/roblox/main/rtx/enhance.txt",true))()
 end)
 
 Lobby.Name = "Lobby"
