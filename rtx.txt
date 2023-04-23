@@ -175,7 +175,7 @@ Reset.Text = "Reset"
 Reset.TextColor3 = Color3.new(0, 1, 1)
 Reset.TextSize = 14
 Reset.MouseButton1Click:connect(function()
-
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Aku122/roblox/main/rtx/reset.txt",true))()
 end)
 
 Lobby.Name = "Lobby"
