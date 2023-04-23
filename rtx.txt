@@ -12,7 +12,7 @@ local Map = Instance.new("TextButton")
 local Damage = Instance.new("TextButton")
 local Lobby = Instance.new("TextButton")
 local Horror = Instance.new("TextButton")
-local v2 = Instance.new("TextButton")
+local Enhance = Instance.new("TextButton")
 --Properties:
 NaturalDisaster.Name = "Natural Disaster"
 NaturalDisaster.Parent = game.CoreGui
@@ -147,6 +147,20 @@ Damage.TextColor3 = Color3.new(0, 1, 1)
 Damage.TextSize = 14
 Damage.MouseButton1Click:connect(function()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Aku122/roblox/main/rtx/afternoon.txt",true))()
+end)
+
+Enhance.Name = "Enhance"
+Enhance.Parent = main
+Enhance.BackgroundColor3 = Color3.new(0, 0, 0)
+Enhance.BackgroundTransparency = 0.5
+Enhance.Position = UDim2.new(-0.00223019363, 0, 0.51813767, 0)
+Enhance.Size = UDim2.new(0, 170, 0, 47)
+Enhance.Font = Enum.Font.SourceSans
+Enhance.Text = "Enhance"
+Enhance.TextColor3 = Color3.new(0, 1, 1)
+Enhance.TextSize = 14
+Enhance.MouseButton1Down:connect(function()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Aku122/roblox/main/rtx/night.txt",true))()
 end)
 
 Lobby.Name = "Lobby"
