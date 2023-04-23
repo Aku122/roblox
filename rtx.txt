@@ -200,6 +200,8 @@ Sky.Parent = Lighting
 Atm.Parent = Lighting
 Gui.Parent = StarterGui
 ShadowFrame.Parent = Gui
+
+Blur.Size = 0
 end)
 
 Lobby.Name = "Lobby"
