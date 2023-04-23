@@ -168,16 +168,28 @@ Reset.Name = "Reset"
 Reset.Parent = main
 Reset.BackgroundColor3 = Color3.new(0, 0, 0)
 Reset.BackgroundTransparency = 0.5
-Reset.Position = UDim2.new(0.53741765, 0, 0.81813767, 0)
+Reset.Position = UDim2.new(0.53741765, 0, 0.61813767, 0)
 Reset.Size = UDim2.new(0, 170, 0, 47)
 Reset.Font = Enum.Font.SourceSans
 Reset.Text = "Reset"
 Reset.TextColor3 = Color3.new(0, 1, 1)
 Reset.TextSize = 14
 Reset.MouseButton1Click:connect(function()
-local light = game.Lighting
-for i, v in pairs(light:GetChildren()) do
-	v:Destroy()
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
+local Bloom = Instance.new("BloomEffect")
+local Blur = Instance.new("BlurEffect")
+local ColorCor = Instance.new("ColorCorrectionEffect")
+local SunRays = Instance.new("SunRaysEffect")
+local Sky = Instance.new("Sky")
+local Atm = Instance.new("Atmosphere")
+local Gui = Instance.new("ScreenGui")
+local ShadowFrame = Instance.new("ImageLabel")
+
+for i, v in pairs(Lighting:GetChildren()) do
+	if v then
+		v:Destroy()
+	end
 end
 end)
 
