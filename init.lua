@@ -1,9 +1,3 @@
-local environment = assert(getgenv, "<OH> ~ Your exploit is not supported")()
-
-if oh then
-    oh.Exit()
-end
-
 local web = true
 local user = "Upbolt" -- change if you're using a fork
 local branch = "revision"
