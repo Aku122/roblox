@@ -1,0 +1,25 @@
+local NaturalDisaster = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local Open = Instance.new("TextButton")
+NaturalDisaster.Name = "Natural Disaster"
+NaturalDisaster.Parent = game.CoreGui
+
+Frame.Parent = NaturalDisaster
+Frame.BackgroundColor3 = Color3.new(1, 1, 1)
+Frame.Position = UDim2.new(0.0101302462, 0, 0.482566237, 0)
+Frame.Size = UDim2.new(0, 103, 0, 36)
+Frame.Style = Enum.FrameStyle.DropShadow
+
+Open.Name = "Open"
+Open.Parent = Frame
+Open.BackgroundColor3 = Color3.new(0, 0, 0)
+Open.BackgroundTransparency = 0.89999997615814
+Open.Position = UDim2.new(0.0485436879, 0, -0.305555552, 0)
+Open.Size = UDim2.new(0, 79, 0, 30)
+Open.Font = Enum.Font.SciFi
+Open.Text = "rob"
+Open.TextColor3 = Color3.new(1, 1, 1)
+Open.TextSize = 14
+Open.MouseButton1Down:connect(function()
+game:GetService("ReplicatedStorage").rob:FireServer()
+end)
