@@ -144,119 +144,86 @@ end
 local function createGUI()
     local gui = Instance.new("ScreenGui")
     gui.Name = guiName
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.ResetOnSpawn = false
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    local frame = Instance.new("Frame", gui)
-    frame.Position = UDim2.new(0, 20, 0, 100)
-    frame.Size = UDim2.new(0, 200, 0, 175)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 180, 0, 160)
+    frame.Position = UDim2.new(0.1, 0, 0.3, 0)
     frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.Active = true
+    frame.Draggable = true -- ✨ Cho phép kéo thả
+    frame.Parent = gui
 
-    local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1, 0, 0, 25)
-    title.Position = UDim2.new(0, 0, 0, 0)
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 20)
     title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    title.Text = "ligma aimbot v1 by @Ryker_plays(on YT)"
+    title.Text = "🧠 ligma aimbot v1"
     title.TextColor3 = Color3.new(1, 1, 1)
     title.TextScaled = true
     title.Font = Enum.Font.SourceSansBold
+    title.Parent = frame
 
-    local aimbotOn = Instance.new("TextButton", frame)
-    aimbotOn.Size = UDim2.new(0.5, -5, 0.4, -5)
-    aimbotOn.Position = UDim2.new(0, 5, 0, 30)
-    aimbotOn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    aimbotOn.Text = "Aimbot ON"
-    aimbotOn.TextColor3 = Color3.new(1, 1, 1)
-    aimbotOn.TextScaled = true
+    local function createButton(name, posX, posY, text, callback)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0.5, -6, 0, 25)
+        btn.Position = UDim2.new(posX, 3, 0, posY)
+        btn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        btn.Text = text
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.TextScaled = true
+        btn.Font = Enum.Font.SourceSans
+        btn.Parent = frame
+        btn.MouseButton1Click:Connect(callback)
+        return btn
+    end
 
-    local aimbotOff = Instance.new("TextButton", frame)
-    aimbotOff.Size = UDim2.new(0.5, -5, 0.4, -5)
-    aimbotOff.Position = UDim2.new(0.5, 5, 0, 30)
-    aimbotOff.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    aimbotOff.Text = "Aimbot OFF ✅"
-    aimbotOff.TextColor3 = Color3.new(1, 1, 1)
-    aimbotOff.TextScaled = true
-
-    local espOn = Instance.new("TextButton", frame)
-    espOn.Size = UDim2.new(0.5, -5, 0.4, -5)
-    espOn.Position = UDim2.new(0, 5, 0.5, 10)
-    espOn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    espOn.Text = "ESP ON"
-    espOn.TextColor3 = Color3.new(1, 1, 1)
-    espOn.TextScaled = true
-
-    local espOff = Instance.new("TextButton", frame)
-    espOff.Size = UDim2.new(0.5, -5, 0.4, -5)
-    espOff.Position = UDim2.new(0.5, 5, 0.5, 10)
-    espOff.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    espOff.Text = "ESP OFF ✅"
-    espOff.TextColor3 = Color3.new(1, 1, 1)
-    espOff.TextScaled = true
-
-    local hideButton = Instance.new("TextButton", gui)
-    hideButton.Size = UDim2.new(0, 100, 0, 30)
-    hideButton.Position = UDim2.new(0, 20, 0, 285)
-    hideButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-    hideButton.Text = "Hide GUI"
-    hideButton.TextColor3 = Color3.new(1, 1, 1)
-    hideButton.TextScaled = true
-
-    local teamCheckButton = Instance.new("TextButton", gui)
-    teamCheckButton.Size = UDim2.new(0, 200, 0, 30)
-    teamCheckButton.Position = UDim2.new(0, 20, 0, 325)
-    teamCheckButton.BackgroundColor3 = Color3.fromRGB(120, 120, 255)
-    teamCheckButton.Text = "Team Check: OFF"
-    teamCheckButton.TextColor3 = Color3.new(1, 1, 1)
-    teamCheckButton.TextScaled = true
-
-    teamCheckButton.MouseButton1Click:Connect(function()
-        teamCheckEnabled = not teamCheckEnabled
-        teamCheckButton.Text = "Team Check: " .. (teamCheckEnabled and "ON ✅" or "OFF")
-        teamCheckButton.BackgroundColor3 = teamCheckEnabled and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(120, 120, 255)
+    local aimbotOnBtn = createButton("aimOn", 0, 25, "Aimbot ON", function()
+        aimbotEnabled = true
+        aimbotOnBtn.Text = "Aimbot ON ✅"
     end)
 
-    hideButton.MouseButton1Click:Connect(function()
+    local aimbotOffBtn = createButton("aimOff", 0.5, 25, "Aimbot OFF", function()
+        aimbotEnabled = false
+        aimbotOffBtn.Text = "Aimbot OFF ✅"
+    end)
+
+    local espOnBtn = createButton("espOn", 0, 55, "ESP ON", function()
+        espEnabled = true
+        espOnBtn.Text = "ESP ON ✅"
+    end)
+
+    local espOffBtn = createButton("espOff", 0.5, 55, "ESP OFF", function()
+        espEnabled = false
+        espOffBtn.Text = "ESP OFF ✅"
+        for _, drawings in pairs(espObjects) do
+            for _, obj in pairs(drawings) do
+                obj.Visible = false
+            end
+        end
+    end)
+
+    local teamCheckBtn = createButton("team", 0, 85, "TeamCheck: OFF", function()
+        teamCheckEnabled = not teamCheckEnabled
+        teamCheckBtn.Text = teamCheckEnabled and "TeamCheck: ON ✅" or "TeamCheck: OFF"
+    end)
+    teamCheckBtn.Size = UDim2.new(1, -6, 0, 25)
+
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(1, -6, 0, 25)
+    toggleBtn.Position = UDim2.new(0, 3, 0, 115)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    toggleBtn.Text = "Ẩn GUI"
+    toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+    toggleBtn.TextScaled = true
+    toggleBtn.Font = Enum.Font.SourceSans
+    toggleBtn.Parent = frame
+
+    toggleBtn.MouseButton1Click:Connect(function()
         guiVisible = not guiVisible
         frame.Visible = guiVisible
-        hideButton.Text = guiVisible and "Hide GUI" or "Show GUI"
-    end)
-
-    aimbotOn.MouseButton1Click:Connect(function()
-        aimbotEnabled = true
-        aimbotOn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        aimbotOff.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        aimbotOn.Text = "Aimbot ON ✅"
-        aimbotOff.Text = "Aimbot OFF"
-    end)
-
-    aimbotOff.MouseButton1Click:Connect(function()
-        aimbotEnabled = false
-        aimbotOn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        aimbotOff.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        aimbotOn.Text = "Aimbot ON"
-        aimbotOff.Text = "Aimbot OFF ✅"
-    end)
-
-    espOn.MouseButton1Click:Connect(function()
-        espEnabled = true
-        espOn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        espOff.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        espOn.Text = "ESP ON ✅"
-        espOff.Text = "ESP OFF"
-    end)
-
-    espOff.MouseButton1Click:Connect(function()
-        espEnabled = false
-        espOn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        espOff.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        espOn.Text = "ESP ON"
-        espOff.Text = "ESP OFF ✅"
-        for _, drawings in pairs(espObjects) do
-            drawings.box.Visible = false
-            drawings.name.Visible = false
-            drawings.distance.Visible = false
-            drawings.tracer.Visible = false
-        end
+        toggleBtn.Text = guiVisible and "Ẩn GUI" or "Hiện GUI"
     end)
 end
 
