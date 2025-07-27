@@ -1,79 +1,214 @@
--- Services
+
 local player = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local players = game:GetService("Players")
 local runService = game:GetService("RunService")
 
--- Aimbot & ESP Variables
+-- Variables
 local aimbotEnabled = false
 local espEnabled = false
 local teamCheckEnabled = false
-local fovRadius = 100
-local guiName = "AimbotToggleGUI"
-local guiVisible = true
+local targetLocked = false
+local lockedTarget = nil
+local fovRadius = 200
+local guiName = "SimpleAimbotGUI"
 local espObjects = {}
 
 -- FOV Circle
 local circle = Drawing.new("Circle")
 circle.Color = Color3.fromRGB(255, 255, 255)
-circle.Thickness = 1
+circle.Thickness = 2
 circle.Filled = false
 circle.Radius = fovRadius
 circle.Visible = true
 circle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
 
--- Show Notification
-local function showNotification()
-    local notification = Instance.new("ScreenGui")
-    notification.Name = "NotificationGUI"
-    notification.ResetOnSpawn = false
-    notification.Parent = player:WaitForChild("PlayerGui")
+-- ESP viewport frame for body ESP
+local vpf = Instance.new("ViewportFrame")
+vpf.Parent = player:WaitForChild("PlayerGui")
+vpf.BackgroundTransparency = 1
+vpf.BorderSizePixel = 0
+vpf.Size = UDim2.new(1, 0, 1, 0)
+vpf.Visible = true
+vpf.Name = "AimbotESP"
 
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://6073491164"
-    sound.Volume = 1
-    sound.Parent = notification
-    sound:Play()
+-- Create Simple GUI
+local function createGUI()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = guiName
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    gui.ResetOnSpawn = false
+    gui.Parent = player:WaitForChild("PlayerGui")
 
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Parent = notification
-    textLabel.Size = UDim2.new(0, 250, 0, 50)
-    textLabel.Position = UDim2.new(1, -260, 1, -60)
-    textLabel.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-    textLabel.BorderSizePixel = 0
-    textLabel.Text = "✅ Script Successfully Executed!"
-    textLabel.TextColor3 = Color3.new(1, 1, 1)
-    textLabel.TextScaled = true
-    textLabel.Font = Enum.Font.SourceSansBold
+    -- Main Frame - Small and compact
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 160, 0, 200)
+    mainFrame.Position = UDim2.new(0, 10, 0, 100)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    mainFrame.BorderSizePixel = 1
+    mainFrame.BorderColor3 = Color3.fromRGB(60, 60, 60)
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = gui
 
-    task.delay(3, function()
-        for i = 1, 10 do
-            textLabel.TextTransparency = i * 0.1
-            textLabel.BackgroundTransparency = i * 0.1
-            task.wait(0.05)
+    -- Title
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 25)
+    title.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    title.BorderSizePixel = 0
+    title.Text = "AIMBOT"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextScaled = true
+    title.Font = Enum.Font.GothamBold
+    title.Parent = mainFrame
+
+    -- Button creation function
+    local function createButton(text, position, callback, activeColor)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -10, 0, 25)
+        btn.Position = position
+        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        btn.BorderSizePixel = 1
+        btn.BorderColor3 = Color3.fromRGB(80, 80, 80)
+        btn.Text = text
+        btn.TextColor3 = Color3.new(1, 1, 1)
+        btn.TextScaled = true
+        btn.Font = Enum.Font.Gotham
+        btn.Parent = mainFrame
+        if callback then
+            btn.MouseButton1Click:Connect(function()
+                callback(btn)
+            end)
         end
-        notification:Destroy()
+        return btn
+    end
+
+    -- Aimbot Toggle
+    local aimbotBtn = createButton("AIMBOT: OFF", UDim2.new(0, 5, 0, 30), function(btn)
+        aimbotEnabled = not aimbotEnabled
+        btn.Text = aimbotEnabled and "AIMBOT: ON" or "AIMBOT: OFF"
+        btn.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
     end)
+
+    -- ESP Toggle
+    local espBtn = createButton("ESP: OFF", UDim2.new(0, 5, 0, 60), function(btn)
+        espEnabled = not espEnabled
+        btn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
+        btn.BackgroundColor3 = espEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
+        if not espEnabled then
+            for _, drawings in pairs(espObjects) do
+                for _, obj in pairs(drawings) do
+                    if obj.Visible ~= nil then
+                        obj.Visible = false
+                    end
+                end
+            end
+            vpf:ClearAllChildren()
+        end
+    end)
+
+    -- Team Check Toggle
+    local teamBtn = createButton("TEAM CHECK: OFF", UDim2.new(0, 5, 0, 90), function(btn)
+        teamCheckEnabled = not teamCheckEnabled
+        btn.Text = teamCheckEnabled and "TEAM CHECK: ON" or "TEAM CHECK: OFF"
+        btn.BackgroundColor3 = teamCheckEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
+    end)
+
+    -- Target Lock Toggle
+    local lockBtn = createButton("LOCK: OFF", UDim2.new(0, 5, 0, 120), function(btn)
+        targetLocked = not targetLocked
+        btn.Text = targetLocked and "LOCK: ON" or "LOCK: OFF"
+        btn.BackgroundColor3 = targetLocked and Color3.fromRGB(150, 0, 150) or Color3.fromRGB(40, 40, 40)
+    end)
+
+    -- Player selection dropdown (compact)
+    local playerDropdown = Instance.new("TextButton")
+    playerDropdown.Size = UDim2.new(1, -10, 0, 25)
+    playerDropdown.Position = UDim2.new(0, 5, 0, 150)
+    playerDropdown.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    playerDropdown.BorderSizePixel = 1
+    playerDropdown.BorderColor3 = Color3.fromRGB(80, 80, 80)
+    playerDropdown.Text = lockedTarget and lockedTarget.Name or "SELECT TARGET"
+    playerDropdown.TextColor3 = Color3.new(1, 1, 1)
+    playerDropdown.TextScaled = true
+    playerDropdown.Font = Enum.Font.Gotham
+    playerDropdown.Parent = mainFrame
+
+    local dropdownOpen = false
+    local playerList = Instance.new("ScrollingFrame")
+    playerList.Size = UDim2.new(1, -10, 0, 100)
+    playerList.Position = UDim2.new(0, 5, 1, 5)
+    playerList.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    playerList.BorderSizePixel = 1
+    playerList.BorderColor3 = Color3.fromRGB(80, 80, 80)
+    playerList.ScrollBarThickness = 4
+    playerList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    playerList.Visible = false
+    playerList.Parent = mainFrame
+
+    playerDropdown.MouseButton1Click:Connect(function()
+        dropdownOpen = not dropdownOpen
+        playerList.Visible = dropdownOpen
+        updatePlayerList()
+    end)
+
+    -- Update player list function
+    function updatePlayerList()
+        for _, child in pairs(playerList:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+
+        local yPos = 0
+        for _, p in pairs(players:GetPlayers()) do
+            if p ~= player and p.Character and p.Character:FindFirstChild("Head") then
+                local playerBtn = Instance.new("TextButton")
+                playerBtn.Size = UDim2.new(1, -5, 0, 20)
+                playerBtn.Position = UDim2.new(0, 2, 0, yPos)
+                playerBtn.BackgroundColor3 = (lockedTarget == p) and Color3.fromRGB(150, 0, 150) or Color3.fromRGB(35, 35, 35)
+                playerBtn.Text = p.Name
+                playerBtn.TextColor3 = Color3.new(1, 1, 1)
+                playerBtn.TextScaled = true
+                playerBtn.Font = Enum.Font.Gotham
+                playerBtn.Parent = playerList
+
+                playerBtn.MouseButton1Click:Connect(function()
+                    lockedTarget = p
+                    playerDropdown.Text = p.Name
+                    playerList.Visible = false
+                    dropdownOpen = false
+                    -- Update all player buttons colors
+                    updatePlayerList()
+                end)
+
+                yPos = yPos + 25
+            end
+        end
+        playerList.CanvasSize = UDim2.new(0, 0, 0, yPos)
+    end
+
+    return gui
 end
 
--- Create ESP for a player
+-- ESP Creation
 local function createESPForPlayer(p)
     local nameTag = Drawing.new("Text")
-    nameTag.Size = 14
+    nameTag.Size = 16
     nameTag.Color = Color3.fromRGB(255, 0, 0)
     nameTag.Center = true
     nameTag.Outline = true
 
-    local distanceTag = Drawing.new("Text")
-    distanceTag.Size = 13
-    distanceTag.Color = Color3.fromRGB(255, 0, 0)
-    distanceTag.Center = true
-    distanceTag.Outline = true
-
     local box = Drawing.new("Square")
-    box.Thickness = 1
+    box.Thickness = 2
     box.Color = Color3.fromRGB(255, 0, 0)
     box.Filled = false
+
+    local distanceTag = Drawing.new("Text")
+    distanceTag.Size = 13
+    distanceTag.Color = Color3.fromRGB(255, 255, 0)
+    distanceTag.Center = true
+    distanceTag.Outline = true
 
     local tracer = Drawing.new("Line")
     tracer.Thickness = 1
@@ -81,13 +216,12 @@ local function createESPForPlayer(p)
 
     espObjects[p] = {
         name = nameTag,
-        distance = distanceTag,
         box = box,
+        distance = distanceTag,
         tracer = tracer
     }
 end
 
--- Remove ESP
 local function removeESPForPlayer(p)
     if espObjects[p] then
         for _, drawing in pairs(espObjects[p]) do
@@ -96,8 +230,6 @@ local function removeESPForPlayer(p)
         espObjects[p] = nil
     end
 end
-
-players.PlayerRemoving:Connect(removeESPForPlayer)
 
 -- Visibility Check
 local function isVisible(part)
@@ -115,8 +247,31 @@ local function isVisible(part)
     end
 end
 
--- Closest Player Function (with team check)
+-- Target selection
 local function getClosestPlayer()
+    -- If lock is enabled and we have a locked target, prioritize it when aimbot is on
+    if targetLocked and lockedTarget and lockedTarget.Character and lockedTarget.Character:FindFirstChild("Head") then
+        local head = lockedTarget.Character.Head
+        local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+        if onScreen and isVisible(head) then
+            -- If aimbot is on, check if locked target is within FOV
+            if aimbotEnabled then
+                local distanceFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
+                if distanceFromCenter < fovRadius then
+                    return lockedTarget
+                end
+            else
+                -- If aimbot is off but lock is on, always return locked target
+                return lockedTarget
+            end
+        end
+    end
+
+    -- If no locked target or aimbot priority, find closest player
+    if not aimbotEnabled then
+        return nil
+    end
+
     local closestPlayer = nil
     local shortestDistance = fovRadius
 
@@ -125,8 +280,17 @@ local function getClosestPlayer()
             if teamCheckEnabled and p.Team == player.Team then
                 continue
             end
+
             local head = p.Character.Head
-            local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+            local rootPart = p.Character:FindFirstChild("HumanoidRootPart")
+
+            local predictedPos = head.Position
+            if rootPart then
+                local velocity = rootPart.Velocity
+                predictedPos = head.Position + (velocity * 0.1)
+            end
+
+            local screenPos, onScreen = camera:WorldToViewportPoint(predictedPos)
             if onScreen then
                 local distanceFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
                 if distanceFromCenter < shortestDistance and isVisible(head) then
@@ -140,114 +304,72 @@ local function getClosestPlayer()
     return closestPlayer
 end
 
--- GUI Creation Function
-local function createGUI()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = guiName
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.ResetOnSpawn = false
-    gui.Parent = player:WaitForChild("PlayerGui")
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 180, 0, 160)
-    frame.Position = UDim2.new(0.1, 0, 0.3, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    frame.Active = true
-    frame.Draggable = true -- ✨ Cho phép kéo thả
-    frame.Parent = gui
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 20)
-    title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    title.Text = "🧠 ligma aimbot v1"
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.TextScaled = true
-    title.Font = Enum.Font.SourceSansBold
-    title.Parent = frame
-
-    local function createButton(name, posX, posY, text, callback)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0.5, -6, 0, 25)
-        btn.Position = UDim2.new(posX, 3, 0, posY)
-        btn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        btn.Text = text
-        btn.TextColor3 = Color3.new(1, 1, 1)
-        btn.TextScaled = true
-        btn.Font = Enum.Font.SourceSans
-        btn.Parent = frame
-        btn.MouseButton1Click:Connect(callback)
-        return btn
-    end
-
-    local aimbotOnBtn = createButton("aimOn", 0, 25, "Aimbot ON", function()
-        aimbotEnabled = true
-        aimbotOnBtn.Text = "Aimbot ON ✅"
-    end)
-
-    local aimbotOffBtn = createButton("aimOff", 0.5, 25, "Aimbot OFF", function()
-        aimbotEnabled = false
-        aimbotOffBtn.Text = "Aimbot OFF ✅"
-    end)
-
-    local espOnBtn = createButton("espOn", 0, 55, "ESP ON", function()
-        espEnabled = true
-        espOnBtn.Text = "ESP ON ✅"
-    end)
-
-    local espOffBtn = createButton("espOff", 0.5, 55, "ESP OFF", function()
-        espEnabled = false
-        espOffBtn.Text = "ESP OFF ✅"
-        for _, drawings in pairs(espObjects) do
-            for _, obj in pairs(drawings) do
-                obj.Visible = false
-            end
-        end
-    end)
-
-    local teamCheckBtn = createButton("team", 0, 85, "TeamCheck: OFF", function()
-        teamCheckEnabled = not teamCheckEnabled
-        teamCheckBtn.Text = teamCheckEnabled and "TeamCheck: ON ✅" or "TeamCheck: OFF"
-    end)
-    teamCheckBtn.Size = UDim2.new(1, -6, 0, 25)
-
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(1, -6, 0, 25)
-    toggleBtn.Position = UDim2.new(0, 3, 0, 115)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    toggleBtn.Text = "Ẩn GUI"
-    toggleBtn.TextColor3 = Color3.new(1, 1, 1)
-    toggleBtn.TextScaled = true
-    toggleBtn.Font = Enum.Font.SourceSans
-    toggleBtn.Parent = frame
-
-    toggleBtn.MouseButton1Click:Connect(function()
-        guiVisible = not guiVisible
-        frame.Visible = guiVisible
-        toggleBtn.Text = guiVisible and "Ẩn GUI" or "Hiện GUI"
-    end)
-end
-
+-- Create GUI
 createGUI()
-showNotification()
 
-player.CharacterAdded:Connect(function()
-    task.wait(1)
-    if not player:WaitForChild("PlayerGui"):FindFirstChild(guiName) then
-        createGUI()
+-- Cleanup on player leaving
+players.PlayerRemoving:Connect(function(p)
+    removeESPForPlayer(p)
+    if lockedTarget == p then
+        lockedTarget = nil
     end
 end)
 
+-- Main loop
 runService.RenderStepped:Connect(function()
     circle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+    circle.Radius = fovRadius * (camera.ViewportSize.Y / 1080)
 
-    if aimbotEnabled then
-        local target = getClosestPlayer()
-        if target and target.Character and target.Character:FindFirstChild("Head") then
-            local headPos = target.Character.Head.Position
-            camera.CFrame = CFrame.new(camera.CFrame.Position, headPos)
+    -- Aimbot
+    local target = getClosestPlayer()
+    if target and target.Character and target.Character:FindFirstChild("Head") then
+        local head = target.Character.Head
+        local rootPart = target.Character:FindFirstChild("HumanoidRootPart")
+
+        local aimPos = head.Position
+        if rootPart then
+            local velocity = rootPart.Velocity
+            aimPos = head.Position + (velocity * 0.15)
+        end
+
+        local currentCF = camera.CFrame
+        local targetDirection = (aimPos - currentCF.Position).Unit
+        local smoothFactor = 0.3
+        local newLookVector = currentCF.LookVector:Lerp(targetDirection, smoothFactor)
+        camera.CFrame = CFrame.new(currentCF.Position, currentCF.Position + newLookVector)
+    end
+
+    -- Body ESP
+    vpf:ClearAllChildren()
+    if espEnabled then
+        vpf.CurrentCamera = camera
+        for _, p in pairs(players:GetPlayers()) do
+            if p ~= player then
+                if teamCheckEnabled and p.Team == player.Team then
+                    continue
+                end
+
+                local char = p.Character
+                if char and char.Parent then
+                    local isLocked = (lockedTarget == p)
+                    local espColor = isLocked and Color3.fromRGB(255, 0, 255) or Color3.fromRGB(255, 0, 0)
+                    
+                    for _, part in pairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            local part1 = Instance.new("Part", vpf)
+                            part1.Color = espColor
+                            part1.Size = part.Size
+                            part1.CFrame = part.CFrame
+                            part1.Material = Enum.Material.ForceField
+                            part1.Transparency = isLocked and 0.3 or 0.7
+                        end
+                    end
+                end
+            end
         end
     end
 
+    -- Line ESP and coordinates
     for _, p in pairs(players:GetPlayers()) do
         if p ~= player then
             if not espObjects[p] then
@@ -271,24 +393,39 @@ runService.RenderStepped:Connect(function()
                 local rootPos2D, onScreen2 = camera:WorldToViewportPoint(hrp.Position)
 
                 if onScreen1 and onScreen2 then
-                    local height = (headPos2D - rootPos2D).Magnitude * 2
-                    local width = height / 2
+                    local height = (headPos2D - rootPos2D).Magnitude * 2.2
+                    local width = height / 2.5
+                    local isLocked = (lockedTarget == p)
 
                     drawings.box.Size = Vector2.new(width, height)
                     drawings.box.Position = Vector2.new(rootPos2D.X - width/2, rootPos2D.Y - height/2)
                     drawings.box.Visible = true
 
-                    drawings.name.Text = p.Name
-                    drawings.name.Position = Vector2.new(headPos2D.X, headPos2D.Y - 20)
+                    if isLocked then
+                        drawings.box.Color = Color3.fromRGB(255, 0, 255)
+                        drawings.box.Thickness = 3
+                        drawings.name.Color = Color3.fromRGB(255, 0, 255)
+                    else
+                        drawings.box.Color = Color3.fromRGB(255, 0, 0)
+                        drawings.box.Thickness = 2
+                        drawings.name.Color = Color3.fromRGB(255, 0, 0)
+                    end
+
+                    drawings.name.Text = p.Name .. (isLocked and " [LOCKED]" or "")
+                    drawings.name.Position = Vector2.new(headPos2D.X, headPos2D.Y - 25)
                     drawings.name.Visible = true
 
+                    -- Distance ESP
                     local distance = math.floor((player.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
                     drawings.distance.Text = tostring(distance) .. "m"
                     drawings.distance.Position = Vector2.new(rootPos2D.X, rootPos2D.Y + height/2 + 5)
+                    drawings.distance.Color = isLocked and Color3.fromRGB(255, 100, 255) or Color3.fromRGB(255, 255, 0)
                     drawings.distance.Visible = true
 
+                    -- Tracer ESP from bottom center of screen to player
                     drawings.tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
                     drawings.tracer.To = Vector2.new(rootPos2D.X, rootPos2D.Y)
+                    drawings.tracer.Color = isLocked and Color3.fromRGB(255, 0, 255) or Color3.fromRGB(255, 0, 0)
                     drawings.tracer.Visible = true
                 else
                     drawings.box.Visible = false
@@ -301,6 +438,19 @@ runService.RenderStepped:Connect(function()
                 drawings.name.Visible = false
                 drawings.distance.Visible = false
                 drawings.tracer.Visible = false
+            end
+        end
+    end
+end)
+
+-- Cleanup on game end
+game:GetService("Players").PlayerRemoving:Connect(function(p)
+    if p == player then
+        circle:Remove()
+        vpf:Destroy()
+        for _, drawings in pairs(espObjects) do
+            for _, obj in pairs(drawings) do
+                obj:Remove()
             end
         end
     end
