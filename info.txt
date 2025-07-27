@@ -1681,7 +1681,7 @@ cbringallbtn.Name = "cbringallbtn"
 cbringallbtn.Parent = cbringframe.framelabel
 cbringallbtn.BackgroundColor3 = Color3.fromRGB(59, 59, 59)
 cbringallbtn.BorderSizePixel = 0
-cbringallbtn.Position = UDim2.new(1, -57, 0, 2)
+cbringallbtn.Position = UDim2.new(1, -177, 0, 2)
 cbringallbtn.Size = UDim2.new(0, 55, 1, -4)
 cbringallbtn.Font = Enum.Font.SourceSans
 cbringallbtn.Text = "+ add all"
@@ -1692,6 +1692,172 @@ cbringallbtn.MouseButton1Click:Connect(function()
 		if (v ~= lp) and v and v.Parent and (not table.find(cbring, v.Name)) then
 			togglecbring(v.Name)
 		end
+	end
+end)
+
+local teamcbringbtn = Instance.new("TextButton")
+teamcbringbtn.Name = "teamcbringbtn"
+teamcbringbtn.Parent = cbringframe.framelabel
+teamcbringbtn.BackgroundColor3 = Color3.fromRGB(59, 59, 59)
+teamcbringbtn.BorderSizePixel = 0
+teamcbringbtn.Position = UDim2.new(1, -117, 0, 2)
+teamcbringbtn.Size = UDim2.new(0, 55, 1, -4)
+teamcbringbtn.Font = Enum.Font.SourceSans
+teamcbringbtn.Text = "teams"
+teamcbringbtn.TextColor3 = Color3.fromRGB(206, 206, 206)
+teamcbringbtn.TextSize = 14.000
+
+local teamsframe = makeFrame(cbringframe, "Teams", Color3.fromRGB(100, 15, 100))
+teamsframe.BorderSizePixel = 1.000
+teamsframe.BorderColor3 = Color3.fromRGB(27, 42, 53)
+teamsframe.Position = UDim2.new(0, 10, -1, -40)
+teamsframe.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+teamsframe.Visible = false
+
+teamcbringbtn.MouseButton1Click:Connect(function()
+	teamsframe.Visible = not teamsframe.Visible
+end)
+
+local hideteamsframe = Instance.new("TextButton")
+hideteamsframe.Name = "hideteamsframe"
+hideteamsframe.Parent = teamsframe.framelabel
+hideteamsframe.BackgroundColor3 = Color3.fromRGB(59, 59, 59)
+hideteamsframe.BorderSizePixel = 0
+hideteamsframe.Position = UDim2.new(1, -17, 0, 2)
+hideteamsframe.Size = UDim2.new(0, 15, 0, 15)
+hideteamsframe.Font = Enum.Font.SourceSans
+hideteamsframe.Text = "X"
+hideteamsframe.TextColor3 = Color3.fromRGB(206, 206, 206)
+hideteamsframe.TextSize = 14.000
+hideteamsframe.MouseButton1Click:Connect(function()
+	teamsframe.Visible = false
+end)
+
+local function makeTeamFrame(team)
+	local teamName = team.Name
+	local teamframe = Instance.new("Frame")
+	teamframe.Name = teamName
+	teamframe.Parent = teamsframe.ScrollingFrame
+	teamframe.BackgroundColor3 = Color3.fromRGB(106, 106, 106)
+	teamframe.BorderSizePixel = 0
+	teamframe.Size = UDim2.new(1, -10, 0, 50)
+	
+	local teamlabel = Instance.new("TextLabel")
+	teamlabel.Name = "teamlabel"
+	teamlabel.Parent = teamframe
+	teamlabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	teamlabel.BackgroundTransparency = 1.000
+	teamlabel.BorderSizePixel = 0
+	teamlabel.Position = UDim2.new(0, 5, 0, 5)
+	teamlabel.Size = UDim2.new(1, -85, 0, 15)
+	teamlabel.Font = Enum.Font.SourceSansBold
+	teamlabel.Text = teamName
+	teamlabel.TextColor3 = team.TeamColor.Color
+	teamlabel.TextSize = 14.000
+	teamlabel.TextXAlignment = Enum.TextXAlignment.Left
+	
+	local membercount = Instance.new("TextLabel")
+	membercount.Name = "membercount"
+	membercount.Parent = teamframe
+	membercount.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	membercount.BackgroundTransparency = 1.000
+	membercount.BorderSizePixel = 0
+	membercount.Position = UDim2.new(0, 5, 0, 22)
+	membercount.Size = UDim2.new(1, -85, 0, 15)
+	membercount.Font = Enum.Font.SourceSans
+	membercount.Text = "0 members"
+	membercount.TextColor3 = Color3.fromRGB(180, 180, 180)
+	membercount.TextSize = 12.000
+	membercount.TextXAlignment = Enum.TextXAlignment.Left
+	
+	local addteambtn = Instance.new("TextButton")
+	addteambtn.Name = "addteambtn"
+	addteambtn.Parent = teamframe
+	addteambtn.BackgroundColor3 = Color3.fromRGB(47, 47, 47)
+	addteambtn.BorderSizePixel = 0
+	addteambtn.Position = UDim2.new(1, -75, 0, 5)
+	addteambtn.Size = UDim2.new(0, 70, 1, -10)
+	addteambtn.Font = Enum.Font.SourceSans
+	addteambtn.Text = "+ add all"
+	addteambtn.TextColor3 = Color3.fromRGB(223, 223, 223)
+	addteambtn.TextSize = 14.000
+	
+	addteambtn.MouseButton1Click:Connect(function()
+		local addedCount = 0
+		for i, v in pairs(plrs:GetPlayers()) do
+			if (v ~= lp) and v and v.Parent and (v.Team == team) and (not table.find(cbring, v.Name)) then
+				togglecbring(v.Name)
+				addedCount = addedCount + 1
+			end
+		end
+		if addedCount > 0 then
+			notify("added " .. addedCount .. " members from " .. teamName .. " to cbring")
+		else
+			notify("no members found in " .. teamName .. " to add")
+		end
+	end)
+	
+	return teamframe
+end
+
+local function updateTeamsDisplay()
+	if not (teamsframe and teamsframe.Parent) then
+		return
+	end
+	
+	local teams = {}
+	for i, v in pairs(plrs:GetPlayers()) do
+		if v.Team and not teams[v.Team] then
+			teams[v.Team] = v.Team
+		end
+	end
+	
+	-- Remove team frames that no longer exist
+	for i, frame in pairs(teamsframe.ScrollingFrame:GetChildren()) do
+		if frame:IsA("Frame") then
+			local teamExists = false
+			for team, _ in pairs(teams) do
+				if team.Name == frame.Name then
+					teamExists = true
+					break
+				end
+			end
+			if not teamExists then
+				frame:Destroy()
+			end
+		end
+	end
+	
+	-- Add new team frames and update existing ones
+	for team, _ in pairs(teams) do
+		local existingFrame = gp(teamsframe.ScrollingFrame, team.Name, "Frame")
+		if not existingFrame then
+			makeTeamFrame(team)
+		else
+			-- Update member count
+			local memberCount = 0
+			for i, v in pairs(plrs:GetPlayers()) do
+				if v.Team == team then
+					memberCount = memberCount + 1
+				end
+			end
+			local memberLabel = gp(existingFrame, "membercount", "TextLabel")
+			if memberLabel then
+				memberLabel.Text = memberCount .. " members"
+			end
+			local teamLabel = gp(existingFrame, "teamlabel", "TextLabel")
+			if teamLabel then
+				teamLabel.TextColor3 = team.TeamColor.Color
+			end
+		end
+	end
+end
+
+-- Update teams display every second
+spawn(function()
+	while gui do
+		updateTeamsDisplay()
+		wait(1)
 	end
 end)
 
