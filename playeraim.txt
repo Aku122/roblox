@@ -11,8 +11,11 @@ local teamCheckEnabled = false
 local targetLocked = false
 local lockedTarget = nil
 local fovRadius = 200
+local wallAimEnabled = false
+local aimDistance = 1000
 local guiName = "SimpleAimbotGUI"
 local espObjects = {}
+local guiCollapsed = false
 
 -- FOV Circle
 local circle = Drawing.new("Circle")
@@ -40,9 +43,9 @@ local function createGUI()
     gui.ResetOnSpawn = false
     gui.Parent = player:WaitForChild("PlayerGui")
 
-    -- Main Frame - Small and compact
+    -- Main Frame - Collapsible (Smaller)
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 160, 0, 200)
+    mainFrame.Size = UDim2.new(0, 160, 0, 260)
     mainFrame.Position = UDim2.new(0, 10, 0, 100)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     mainFrame.BorderSizePixel = 1
@@ -51,21 +54,51 @@ local function createGUI()
     mainFrame.Draggable = true
     mainFrame.Parent = gui
 
-    -- Title
+    -- Title with collapse button
+    local titleFrame = Instance.new("Frame")
+    titleFrame.Size = UDim2.new(1, 0, 0, 25)
+    titleFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    titleFrame.BorderSizePixel = 0
+    titleFrame.Parent = mainFrame
+
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 25)
-    title.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    title.BorderSizePixel = 0
+    title.Size = UDim2.new(1, -25, 1, 0)
+    title.BackgroundTransparency = 1
     title.Text = "AIMBOT"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.TextScaled = true
     title.Font = Enum.Font.GothamBold
-    title.Parent = mainFrame
+    title.Parent = titleFrame
 
-    -- Button creation function
-    local function createButton(text, position, callback, activeColor)
+    local collapseBtn = Instance.new("TextButton")
+    collapseBtn.Size = UDim2.new(0, 25, 1, 0)
+    collapseBtn.Position = UDim2.new(1, -25, 0, 0)
+    collapseBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    collapseBtn.Text = "-"
+    collapseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    collapseBtn.TextScaled = true
+    collapseBtn.Font = Enum.Font.GothamBold
+    collapseBtn.Parent = titleFrame
+
+    -- Content Frame
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Size = UDim2.new(1, 0, 1, -25)
+    contentFrame.Position = UDim2.new(0, 0, 0, 25)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.Parent = mainFrame
+
+    -- Collapse function
+    collapseBtn.MouseButton1Click:Connect(function()
+        guiCollapsed = not guiCollapsed
+        contentFrame.Visible = not guiCollapsed
+        collapseBtn.Text = guiCollapsed and "+" or "-"
+        mainFrame.Size = guiCollapsed and UDim2.new(0, 160, 0, 25) or UDim2.new(0, 160, 0, 290)
+    end)
+
+    -- Button creation function (Smaller buttons)
+    local function createButton(text, position, callback)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -10, 0, 25)
+        btn.Size = UDim2.new(1, -8, 0, 22)
         btn.Position = position
         btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
         btn.BorderSizePixel = 1
@@ -74,7 +107,7 @@ local function createGUI()
         btn.TextColor3 = Color3.new(1, 1, 1)
         btn.TextScaled = true
         btn.Font = Enum.Font.Gotham
-        btn.Parent = mainFrame
+        btn.Parent = contentFrame
         if callback then
             btn.MouseButton1Click:Connect(function()
                 callback(btn)
@@ -84,14 +117,21 @@ local function createGUI()
     end
 
     -- Aimbot Toggle
-    local aimbotBtn = createButton("AIMBOT: OFF", UDim2.new(0, 5, 0, 30), function(btn)
+    local aimbotBtn = createButton("AIMBOT: OFF", UDim2.new(0, 4, 0, 3), function(btn)
         aimbotEnabled = not aimbotEnabled
         btn.Text = aimbotEnabled and "AIMBOT: ON" or "AIMBOT: OFF"
         btn.BackgroundColor3 = aimbotEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
     end)
 
+    -- Wall Aim Toggle
+    local wallAimBtn = createButton("WALL AIM: OFF", UDim2.new(0, 4, 0, 28), function(btn)
+        wallAimEnabled = not wallAimEnabled
+        btn.Text = wallAimEnabled and "WALL AIM: ON" or "WALL AIM: OFF"
+        btn.BackgroundColor3 = wallAimEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
+    end)
+
     -- ESP Toggle
-    local espBtn = createButton("ESP: OFF", UDim2.new(0, 5, 0, 60), function(btn)
+    local espBtn = createButton("ESP: OFF", UDim2.new(0, 4, 0, 53), function(btn)
         espEnabled = not espEnabled
         btn.Text = espEnabled and "ESP: ON" or "ESP: OFF"
         btn.BackgroundColor3 = espEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
@@ -108,23 +148,56 @@ local function createGUI()
     end)
 
     -- Team Check Toggle
-    local teamBtn = createButton("TEAM CHECK: OFF", UDim2.new(0, 5, 0, 90), function(btn)
+    local teamBtn = createButton("TEAM CHECK: OFF", UDim2.new(0, 4, 0, 78), function(btn)
         teamCheckEnabled = not teamCheckEnabled
         btn.Text = teamCheckEnabled and "TEAM CHECK: ON" or "TEAM CHECK: OFF"
         btn.BackgroundColor3 = teamCheckEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
     end)
 
     -- Target Lock Toggle
-    local lockBtn = createButton("LOCK: OFF", UDim2.new(0, 5, 0, 120), function(btn)
+    local lockBtn = createButton("LOCK: OFF", UDim2.new(0, 4, 0, 103), function(btn)
         targetLocked = not targetLocked
         btn.Text = targetLocked and "LOCK: ON" or "LOCK: OFF"
         btn.BackgroundColor3 = targetLocked and Color3.fromRGB(150, 0, 150) or Color3.fromRGB(40, 40, 40)
     end)
 
-    -- Player selection dropdown (compact)
+    -- Aim Distance Input
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Size = UDim2.new(1, -8, 0, 18)
+    distanceLabel.Position = UDim2.new(0, 4, 0, 128)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.Text = "AIM DISTANCE:"
+    distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    distanceLabel.TextScaled = true
+    distanceLabel.Font = Enum.Font.Gotham
+    distanceLabel.Parent = contentFrame
+
+    local distanceInput = Instance.new("TextBox")
+    distanceInput.Size = UDim2.new(1, -8, 0, 22)
+    distanceInput.Position = UDim2.new(0, 4, 0, 148)
+    distanceInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    distanceInput.BorderSizePixel = 1
+    distanceInput.BorderColor3 = Color3.fromRGB(80, 80, 80)
+    distanceInput.Text = tostring(aimDistance)
+    distanceInput.PlaceholderText = "Enter distance (default: 1000)"
+    distanceInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    distanceInput.TextScaled = true
+    distanceInput.Font = Enum.Font.Gotham
+    distanceInput.Parent = contentFrame
+
+    distanceInput.FocusLost:Connect(function()
+        local newDistance = tonumber(distanceInput.Text)
+        if newDistance and newDistance > 0 then
+            aimDistance = newDistance
+        else
+            distanceInput.Text = tostring(aimDistance)
+        end
+    end)
+
+    -- Player selection dropdown
     local playerDropdown = Instance.new("TextButton")
-    playerDropdown.Size = UDim2.new(1, -10, 0, 25)
-    playerDropdown.Position = UDim2.new(0, 5, 0, 150)
+    playerDropdown.Size = UDim2.new(1, -8, 0, 22)
+    playerDropdown.Position = UDim2.new(0, 4, 0, 173)
     playerDropdown.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     playerDropdown.BorderSizePixel = 1
     playerDropdown.BorderColor3 = Color3.fromRGB(80, 80, 80)
@@ -132,19 +205,42 @@ local function createGUI()
     playerDropdown.TextColor3 = Color3.new(1, 1, 1)
     playerDropdown.TextScaled = true
     playerDropdown.Font = Enum.Font.Gotham
-    playerDropdown.Parent = mainFrame
+    playerDropdown.Parent = contentFrame
 
     local dropdownOpen = false
     local playerList = Instance.new("ScrollingFrame")
-    playerList.Size = UDim2.new(1, -10, 0, 100)
-    playerList.Position = UDim2.new(0, 5, 1, 5)
+    playerList.Size = UDim2.new(1, -8, 0, 60)
+    playerList.Position = UDim2.new(0, 4, 0, 198)
     playerList.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     playerList.BorderSizePixel = 1
     playerList.BorderColor3 = Color3.fromRGB(80, 80, 80)
     playerList.ScrollBarThickness = 4
     playerList.CanvasSize = UDim2.new(0, 0, 0, 0)
     playerList.Visible = false
-    playerList.Parent = mainFrame
+    playerList.Parent = contentFrame
+
+    -- Shift Lock Button (works on both mobile and PC)
+    local shiftLockEnabled = false
+    local shiftLockBtn = createButton("SHIFT LOCK: OFF", UDim2.new(0, 4, 0, 263), function(btn)
+        shiftLockEnabled = not shiftLockEnabled
+        btn.Text = shiftLockEnabled and "SHIFT LOCK: ON" or "SHIFT LOCK: OFF"
+        btn.BackgroundColor3 = shiftLockEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(40, 40, 40)
+        
+        -- Enable/disable mouse lock
+        player.DevEnableMouseLock = shiftLockEnabled
+        
+        -- Create or remove crosshair
+        if shiftLockEnabled then
+            createCrosshair()
+        else
+            removeCrosshair()
+        end
+    end)
+    
+    -- Adjust main frame size to accommodate shift lock button
+    mainFrame.Size = UDim2.new(0, 160, 0, 290)
+    
+    
 
     playerDropdown.MouseButton1Click:Connect(function()
         dropdownOpen = not dropdownOpen
@@ -174,11 +270,16 @@ local function createGUI()
                 playerBtn.Parent = playerList
 
                 playerBtn.MouseButton1Click:Connect(function()
-                    lockedTarget = p
-                    playerDropdown.Text = p.Name
+                    if lockedTarget == p then
+                        -- Deselect if clicking on already selected player
+                        lockedTarget = nil
+                        playerDropdown.Text = "SELECT TARGET"
+                    else
+                        lockedTarget = p
+                        playerDropdown.Text = p.Name
+                    end
                     playerList.Visible = false
                     dropdownOpen = false
-                    -- Update all player buttons colors
                     updatePlayerList()
                 end)
 
@@ -189,6 +290,67 @@ local function createGUI()
     end
 
     return gui
+end
+
+-- Crosshair variables
+local crosshair = {}
+
+-- Create crosshair function
+local function createCrosshair()
+    if crosshair.horizontal then return end -- Already exists
+    
+    crosshair.horizontal = Drawing.new("Line")
+    crosshair.horizontal.Thickness = 2
+    crosshair.horizontal.Color = Color3.fromRGB(255, 255, 255)
+    crosshair.horizontal.Visible = true
+    
+    crosshair.vertical = Drawing.new("Line")
+    crosshair.vertical.Thickness = 2
+    crosshair.vertical.Color = Color3.fromRGB(255, 255, 255)
+    crosshair.vertical.Visible = true
+    
+    crosshair.dot = Drawing.new("Circle")
+    crosshair.dot.Thickness = 1
+    crosshair.dot.Color = Color3.fromRGB(255, 255, 255)
+    crosshair.dot.Filled = true
+    crosshair.dot.Radius = 2
+    crosshair.dot.Visible = true
+end
+
+-- Remove crosshair function
+local function removeCrosshair()
+    if crosshair.horizontal then
+        crosshair.horizontal:Remove()
+        crosshair.horizontal = nil
+    end
+    if crosshair.vertical then
+        crosshair.vertical:Remove()
+        crosshair.vertical = nil
+    end
+    if crosshair.dot then
+        crosshair.dot:Remove()
+        crosshair.dot = nil
+    end
+end
+
+-- Update crosshair position
+local function updateCrosshair()
+    if not crosshair.horizontal then return end
+    
+    local centerX = camera.ViewportSize.X / 2
+    local centerY = camera.ViewportSize.Y / 2
+    local size = 10
+    
+    -- Horizontal line
+    crosshair.horizontal.From = Vector2.new(centerX - size, centerY)
+    crosshair.horizontal.To = Vector2.new(centerX + size, centerY)
+    
+    -- Vertical line
+    crosshair.vertical.From = Vector2.new(centerX, centerY - size)
+    crosshair.vertical.To = Vector2.new(centerX, centerY + size)
+    
+    -- Center dot
+    crosshair.dot.Position = Vector2.new(centerX, centerY)
 end
 
 -- ESP Creation
@@ -234,6 +396,8 @@ end
 -- Visibility Check
 local function isVisible(part)
     if not part then return false end
+    if wallAimEnabled then return true end -- Skip wall check if wall aim is enabled
+    
     local origin = camera.CFrame.Position
     local direction = (part.Position - origin)
     local rayParams = RaycastParams.new()
@@ -252,17 +416,25 @@ local function getClosestPlayer()
     -- If lock is enabled and we have a locked target, prioritize it when aimbot is on
     if targetLocked and lockedTarget and lockedTarget.Character and lockedTarget.Character:FindFirstChild("Head") then
         local head = lockedTarget.Character.Head
-        local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
-        if onScreen and isVisible(head) then
-            -- If aimbot is on, check if locked target is within FOV
-            if aimbotEnabled then
-                local distanceFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
-                if distanceFromCenter < fovRadius then
-                    return lockedTarget
+        local rootPart = lockedTarget.Character:FindFirstChild("HumanoidRootPart")
+        
+        -- Check distance to locked player
+        if rootPart and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local playerDistance = (player.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+            if playerDistance <= aimDistance then
+                local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                if onScreen and isVisible(head) then
+                    -- If aimbot is on, check if locked target is within FOV
+                    if aimbotEnabled then
+                        local distanceFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
+                        if distanceFromCenter < fovRadius then
+                            return lockedTarget
+                        end
+                    else
+                        -- If aimbot is off but lock is on, always return locked target
+                        return lockedTarget
+                    end
                 end
-            else
-                -- If aimbot is off but lock is on, always return locked target
-                return lockedTarget
             end
         end
     end
@@ -274,6 +446,25 @@ local function getClosestPlayer()
 
     local closestPlayer = nil
     local shortestDistance = fovRadius
+    local lockedPlayerDistance = math.huge
+
+    -- First pass: check if locked player is valid and get its distance
+    if targetLocked and lockedTarget and lockedTarget.Character and lockedTarget.Character:FindFirstChild("Head") then
+        local head = lockedTarget.Character.Head
+        local rootPart = lockedTarget.Character:FindFirstChild("HumanoidRootPart")
+        if rootPart and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local playerDistance = (player.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+            if playerDistance <= aimDistance then
+                local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                if onScreen and isVisible(head) then
+                    local distanceFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
+                    if distanceFromCenter < fovRadius then
+                        lockedPlayerDistance = distanceFromCenter
+                    end
+                end
+            end
+        end
+    end
 
     for _, p in pairs(players:GetPlayers()) do
         if p ~= player and p.Character and p.Character:FindFirstChild("Head") then
@@ -283,6 +474,14 @@ local function getClosestPlayer()
 
             local head = p.Character.Head
             local rootPart = p.Character:FindFirstChild("HumanoidRootPart")
+
+            -- Check distance to player
+            if rootPart and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local playerDistance = (player.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude
+                if playerDistance > aimDistance then
+                    continue
+                end
+            end
 
             local predictedPos = head.Position
             if rootPart then
@@ -294,8 +493,17 @@ local function getClosestPlayer()
             if onScreen then
                 local distanceFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
                 if distanceFromCenter < shortestDistance and isVisible(head) then
-                    shortestDistance = distanceFromCenter
-                    closestPlayer = p
+                    -- Prioritize locked player: if locked player distance is close to this player's distance, choose locked
+                    if targetLocked and lockedTarget == p then
+                        shortestDistance = distanceFromCenter
+                        closestPlayer = p
+                    elseif lockedPlayerDistance < math.huge and math.abs(distanceFromCenter - lockedPlayerDistance) < 50 then
+                        -- If locked player is within 50 pixels of this player, prioritize locked
+                        closestPlayer = lockedTarget
+                    elseif distanceFromCenter < lockedPlayerDistance then
+                        shortestDistance = distanceFromCenter
+                        closestPlayer = p
+                    end
                 end
             end
         end
@@ -319,6 +527,22 @@ end)
 runService.RenderStepped:Connect(function()
     circle.Position = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
     circle.Radius = fovRadius * (camera.ViewportSize.Y / 1080)
+    
+    -- Update crosshair position
+    updateCrosshair()
+    
+    -- Shift-lock camera control
+    if shiftLockEnabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local humanoidRootPart = player.Character.HumanoidRootPart
+        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+        
+        if humanoid then
+            -- Make character face camera direction
+            local cameraDirection = camera.CFrame.LookVector
+            local newCFrame = CFrame.lookAt(humanoidRootPart.Position, humanoidRootPart.Position + Vector3.new(cameraDirection.X, 0, cameraDirection.Z))
+            humanoidRootPart.CFrame = humanoidRootPart.CFrame:Lerp(newCFrame, 0.3)
+        end
+    end
 
     -- Aimbot
     local target = getClosestPlayer()
@@ -448,6 +672,7 @@ game:GetService("Players").PlayerRemoving:Connect(function(p)
     if p == player then
         circle:Remove()
         vpf:Destroy()
+        removeCrosshair()
         for _, drawings in pairs(espObjects) do
             for _, obj in pairs(drawings) do
                 obj:Remove()
