@@ -8,7 +8,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local mouse = player:GetMouse()
 
--- Telekinesis System with Enhanced Decorations
+-- Telekinesis System with Advanced Decorations
 local TelekinesisSystem = {}
 TelekinesisSystem.__index = TelekinesisSystem
 
@@ -20,211 +20,191 @@ local CONFIG = {
     launchVelocity = 50,
     defaultLaunchForce = 50,
     minLaunchForce = 0,
-    maxLaunchForce = 999999
+    maxLaunchForce = 999999,
+    holdThreshold = 0.8
 }
 
--- Decoration Effects System
+-- Advanced Decoration Effects System
 local DecorationSystem = {
     effects = {},
     decorationTypes = {
-        "Rainbow", "Orbit", "Pulse", "Spin", "Float", "Glow", "Trail", "Bubble"
+        "Rainbow", "Angel_Wings", "Demon_Wings", "Dragon_Aura", "Death_Crown", 
+        "Void_Portal", "Death_Cage", "Shadow_Blades", "Hell_Spiral", "Devil_Cross",
+        "Death_Ring", "Pentagram", "Blood_Ritual", "Convergence", "Orbit_Shield"
     }
 }
 
-function DecorationSystem:CreateEffect(obj, effectType)
-    if self.effects[obj] then
-        self:RemoveEffect(obj)
-    end
+function DecorationSystem:CreateEffect(selectedObjects, effectType, targetObject)
+    self:RemoveAllEffects()
+    
+    if not targetObject or not targetObject.Parent then return end
     
     local effect = {}
     effect.type = effectType
-    effect.object = obj
+    effect.targetObject = targetObject
+    effect.selectedObjects = selectedObjects
     effect.parts = {}
     effect.connections = {}
+    effect.startTime = tick()
     
     if effectType == "Rainbow" then
-        effect = self:CreateRainbowEffect(obj, effect)
-    elseif effectType == "Orbit" then
-        effect = self:CreateOrbitEffect(obj, effect)
-    elseif effectType == "Pulse" then
-        effect = self:CreatePulseEffect(obj, effect)
-    elseif effectType == "Spin" then
-        effect = self:CreateSpinEffect(obj, effect)
-    elseif effectType == "Float" then
-        effect = self:CreateFloatEffect(obj, effect)
-    elseif effectType == "Glow" then
-        effect = self:CreateGlowEffect(obj, effect)
-    elseif effectType == "Trail" then
-        effect = self:CreateTrailEffect(obj, effect)
-    elseif effectType == "Bubble" then
-        effect = self:CreateBubbleEffect(obj, effect)
+        effect = self:CreateRainbowEffect(selectedObjects, targetObject, effect)
+    elseif effectType == "Angel_Wings" then
+        effect = self:CreateAngelWingsEffect(selectedObjects, targetObject, effect)
+    elseif effectType == "Demon_Wings" then
+        effect = self:CreateDemonWingsEffect(selectedObjects, targetObject, effect)
+    elseif effectType == "Dragon_Aura" then
+        effect = self:CreateDragonAuraEffect(selectedObjects, targetObject, effect)
+    elseif effectType == "Convergence" then
+        effect = self:CreateConvergenceEffect(selectedObjects, targetObject, effect)
+    elseif effectType == "Orbit_Shield" then
+        effect = self:CreateOrbitShieldEffect(selectedObjects, targetObject, effect)
     end
     
-    self.effects[obj] = effect
+    self.effects.current = effect
     return effect
 end
 
-function DecorationSystem:CreateRainbowEffect(obj, effect)
-    local startTime = tick()
+function DecorationSystem:CreateRainbowEffect(selectedObjects, targetObject, effect)
     effect.connections[1] = RunService.Heartbeat:Connect(function()
-        local hue = (tick() - startTime) % 6 / 6
-        obj.Color = Color3.fromHSV(hue, 1, 1)
-    end)
-    return effect
-end
-
-function DecorationSystem:CreateOrbitEffect(obj, effect)
-    local orbitParts = {}
-    for i = 1, 4 do
-        local orbitPart = Instance.new("Part")
-        orbitPart.Size = Vector3.new(0.5, 0.5, 0.5)
-        orbitPart.Material = Enum.Material.Neon
-        orbitPart.Color = Color3.fromHSV(i/4, 1, 1)
-        orbitPart.CanCollide = false
-        orbitPart.Anchored = true
-        orbitPart.Parent = workspace
-        table.insert(orbitParts, orbitPart)
-    end
-    
-    effect.parts = orbitParts
-    local startTime = tick()
-    effect.connections[1] = RunService.Heartbeat:Connect(function()
-        local time = tick() - startTime
-        for i, part in pairs(orbitParts) do
-            local angle = (time * 2 + (i-1) * math.pi/2) % (2 * math.pi)
-            local radius = obj.Size.Magnitude + 2
-            local x = math.cos(angle) * radius
-            local z = math.sin(angle) * radius
-            part.Position = obj.Position + Vector3.new(x, 0, z)
+        local hue = (tick() - effect.startTime) % 6 / 6
+        for _, obj in pairs(selectedObjects) do
+            if obj and obj.Parent then
+                obj.Color = Color3.fromHSV(hue, 1, 1)
+            end
         end
     end)
     return effect
 end
 
-function DecorationSystem:CreatePulseEffect(obj, effect)
-    local originalSize = obj.Size
-    local startTime = tick()
+function DecorationSystem:CreateAngelWingsEffect(selectedObjects, targetObject, effect)
     effect.connections[1] = RunService.Heartbeat:Connect(function()
-        local pulse = math.sin((tick() - startTime) * 5) * 0.2 + 1
-        obj.Size = originalSize * pulse
-    end)
-    return effect
-end
-
-function DecorationSystem:CreateSpinEffect(obj, effect)
-    local startTime = tick()
-    effect.connections[1] = RunService.Heartbeat:Connect(function()
-        local rotation = (tick() - startTime) * 2
-        obj.CFrame = CFrame.new(obj.Position) * CFrame.Angles(rotation, rotation * 0.7, rotation * 0.3)
-    end)
-    return effect
-end
-
-function DecorationSystem:CreateFloatEffect(obj, effect)
-    local originalY = obj.Position.Y
-    local startTime = tick()
-    effect.connections[1] = RunService.Heartbeat:Connect(function()
-        local float = math.sin((tick() - startTime) * 3) * 2
-        local currentPos = obj.Position
-        obj.Position = Vector3.new(currentPos.X, originalY + float, currentPos.Z)
-    end)
-    return effect
-end
-
-function DecorationSystem:CreateGlowEffect(obj, effect)
-    local pointLight = Instance.new("PointLight")
-    pointLight.Brightness = 2
-    pointLight.Range = 10
-    pointLight.Color = Color3.fromRGB(255, 255, 0)
-    pointLight.Parent = obj
-    
-    table.insert(effect.parts, pointLight)
-    
-    local startTime = tick()
-    effect.connections[1] = RunService.Heartbeat:Connect(function()
-        local brightness = math.sin((tick() - startTime) * 4) * 1 + 2
-        pointLight.Brightness = brightness
-    end)
-    return effect
-end
-
-function DecorationSystem:CreateTrailEffect(obj, effect)
-    local attachment0 = Instance.new("Attachment")
-    local attachment1 = Instance.new("Attachment")
-    attachment0.Position = Vector3.new(0, 0, 0)
-    attachment1.Position = Vector3.new(0, 0, 0)
-    attachment0.Parent = obj
-    attachment1.Parent = obj
-    
-    local trail = Instance.new("Trail")
-    trail.Attachment0 = attachment0
-    trail.Attachment1 = attachment1
-    trail.Lifetime = 1
-    trail.Color = ColorSequence.new(Color3.fromRGB(255, 255, 0))
-    trail.Transparency = NumberSequence.new{
-        NumberSequenceKeypoint.new(0, 0),
-        NumberSequenceKeypoint.new(1, 1)
-    }
-    trail.Parent = obj
-    
-    table.insert(effect.parts, trail)
-    table.insert(effect.parts, attachment0)
-    table.insert(effect.parts, attachment1)
-    return effect
-end
-
-function DecorationSystem:CreateBubbleEffect(obj, effect)
-    local bubbles = {}
-    for i = 1, 6 do
-        local bubble = Instance.new("Part")
-        bubble.Size = Vector3.new(0.3, 0.3, 0.3)
-        bubble.Material = Enum.Material.ForceField
-        bubble.Shape = Enum.PartType.Ball
-        bubble.Color = Color3.fromHSV(math.random(), 0.7, 1)
-        bubble.CanCollide = false
-        bubble.Anchored = true
-        bubble.Parent = workspace
-        table.insert(bubbles, bubble)
-    end
-    
-    effect.parts = bubbles
-    local startTime = tick()
-    effect.connections[1] = RunService.Heartbeat:Connect(function()
-        local time = tick() - startTime
-        for i, bubble in pairs(bubbles) do
-            local angle = (time + i) * 2
-            local height = math.sin(time * 2 + i) * 3
-            local radius = 2 + math.sin(time + i) * 1
-            local x = math.cos(angle) * radius
-            local z = math.sin(angle) * radius
-            bubble.Position = obj.Position + Vector3.new(x, height, z)
+        local time = tick() - effect.startTime
+        local targetPos = targetObject.Position
+        
+        for i, obj in pairs(selectedObjects) do
+            if obj and obj.Parent and obj ~= targetObject then
+                local side = i % 2 == 0 and 1 or -1
+                local layer = math.floor(i / 2) / 4
+                local curve = math.sin(layer * math.pi + time * 2) * 0.5
+                local x = side * (3 * layer + 1)
+                local y = 2 * curve
+                local z = -layer * 1.5
+                
+                local newPos = targetPos + Vector3.new(x, y, z)
+                if obj:FindFirstChild("BodyPosition") then
+                    obj.BodyPosition.Position = newPos
+                end
+            end
         end
     end)
     return effect
 end
 
-function DecorationSystem:RemoveEffect(obj)
-    local effect = self.effects[obj]
-    if not effect then return end
-    
-    for _, connection in pairs(effect.connections) do
-        if connection then
-            connection:Disconnect()
+function DecorationSystem:CreateDemonWingsEffect(selectedObjects, targetObject, effect)
+    effect.connections[1] = RunService.Heartbeat:Connect(function()
+        local time = tick() - effect.startTime
+        local targetPos = targetObject.Position
+        
+        for i, obj in pairs(selectedObjects) do
+            if obj and obj.Parent and obj ~= targetObject then
+                local side = i % 2 == 0 and 1 or -1
+                local progress = (i / #selectedObjects)
+                local curve = math.sin(progress * math.pi + time) * 0.8
+                local x = side * (4 * progress + 1)
+                local y = 2 * curve + math.sin(time + progress * 2) * 0.5
+                local z = -progress * 2
+                
+                local newPos = targetPos + Vector3.new(x, y, z)
+                if obj:FindFirstChild("BodyPosition") then
+                    obj.BodyPosition.Position = newPos
+                end
+            end
         end
-    end
-    
-    for _, part in pairs(effect.parts) do
-        if part and part.Parent then
-            part:Destroy()
+    end)
+    return effect
+end
+
+function DecorationSystem:CreateDragonAuraEffect(selectedObjects, targetObject, effect)
+    effect.connections[1] = RunService.Heartbeat:Connect(function()
+        local time = tick() - effect.startTime
+        local targetPos = targetObject.Position
+        
+        for i, obj in pairs(selectedObjects) do
+            if obj and obj.Parent and obj ~= targetObject then
+                local height = (i / #selectedObjects) * 6 - 3
+                local angle = (i / #selectedObjects) * math.pi * 8 + time * 2
+                local radius = 4 * (1 - math.abs(height)/6)
+                local x = math.cos(angle) * radius
+                local z = math.sin(angle) * radius
+                
+                local newPos = targetPos + Vector3.new(x, height, z)
+                if obj:FindFirstChild("BodyPosition") then
+                    obj.BodyPosition.Position = newPos
+                end
+            end
         end
-    end
-    
-    self.effects[obj] = nil
+    end)
+    return effect
+end
+
+function DecorationSystem:CreateConvergenceEffect(selectedObjects, targetObject, effect)
+    effect.connections[1] = RunService.Heartbeat:Connect(function()
+        local time = tick() - effect.startTime
+        local targetPos = targetObject.Position
+        
+        for i, obj in pairs(selectedObjects) do
+            if obj and obj.Parent and obj ~= targetObject then
+                local angle = (i / #selectedObjects) * math.pi * 2
+                local distance = 8 + math.sin(time * 3 + i * 0.5) * 3
+                local convergePulse = math.sin(time * 5) * 0.5 + 0.5
+                local finalDistance = distance * (1 - convergePulse * 0.8)
+                local x = math.cos(angle + time) * finalDistance
+                local y = math.sin(time * 2 + i * 0.3) * 2
+                local z = math.sin(angle + time) * finalDistance
+                
+                local newPos = targetPos + Vector3.new(x, y, z)
+                if obj:FindFirstChild("BodyPosition") then
+                    obj.BodyPosition.Position = newPos
+                end
+            end
+        end
+    end)
+    return effect
+end
+
+function DecorationSystem:CreateOrbitShieldEffect(selectedObjects, targetObject, effect)
+    effect.connections[1] = RunService.Heartbeat:Connect(function()
+        local time = tick() - effect.startTime
+        local targetPos = targetObject.Position
+        
+        for i, obj in pairs(selectedObjects) do
+            if obj and obj.Parent and obj ~= targetObject then
+                local layer = i
+                local angle = time * (layer * 0.5 + 1)
+                local height = math.sin(time + layer) * layer * 0.5
+                local radius = 3 + layer * 0.5
+                local x = math.cos(angle) * radius
+                local z = math.sin(angle) * radius
+                
+                local newPos = targetPos + Vector3.new(x, height, z)
+                if obj:FindFirstChild("BodyPosition") then
+                    obj.BodyPosition.Position = newPos
+                end
+            end
+        end
+    end)
+    return effect
 end
 
 function DecorationSystem:RemoveAllEffects()
-    for obj, _ in pairs(self.effects) do
-        self:RemoveEffect(obj)
+    if self.effects.current then
+        for _, connection in pairs(self.effects.current.connections) do
+            if connection then
+                connection:Disconnect()
+            end
+        end
+        self.effects.current = nil
     end
 end
 
@@ -239,11 +219,13 @@ function TelekinesisSystem.new()
     self.bodyPositions = {}
     self.selectionBoxes = {}
     self.lockedObjects = {}
+    self.frozenOrientations = {}
     self.mousedown = false
     self.isHolding = false
     self.holdStartTime = 0
-    self.holdThreshold = 0.5
+    self.holdThreshold = CONFIG.holdThreshold
     self.movementLocked = false
+    self.orientationLocked = false
     self.launchEnabled = true
     self.isCompact = false
     self.gui = nil
@@ -251,8 +233,9 @@ function TelekinesisSystem.new()
     self.nearbyParts = {}
     self.dropdownOpen = false
     self.selectedBlocksList = {}
-    self.decorationEnabled = true
+    self.decorationEnabled = false
     self.currentDecoration = "Rainbow"
+    self.decorTarget = "Player" -- Player or Primary
     
     self.keysDown = {}
     self.movementSpeed = 15
@@ -272,10 +255,10 @@ function TelekinesisSystem:CreateGUI()
     screenGui.Parent = playerGui
     screenGui.ResetOnSpawn = false
 
-    -- Main Frame (optimized for mobile)
+    -- Main Frame (more compact)
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 220, 0, 340)
+    mainFrame.Size = UDim2.new(0, 200, 0, 280)
     mainFrame.Position = UDim2.new(0, 10, 0, 10)
     mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     mainFrame.BorderSizePixel = 0
@@ -291,7 +274,7 @@ function TelekinesisSystem:CreateGUI()
     -- Title bar (compact)
     local titleBar = Instance.new("Frame")
     titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 25)
+    titleBar.Size = UDim2.new(1, 0, 0, 22)
     titleBar.Position = UDim2.new(0, 0, 0, 0)
     titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     titleBar.BorderSizePixel = 0
@@ -302,12 +285,12 @@ function TelekinesisSystem:CreateGUI()
     titleCorner.Parent = titleBar
 
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, -50, 1, 0)
-    titleLabel.Position = UDim2.new(0, 5, 0, 0)
+    titleLabel.Size = UDim2.new(1, -45, 1, 0)
+    titleLabel.Position = UDim2.new(0, 3, 0, 0)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = "Telekinesis Pro"
     titleLabel.TextColor3 = Color3.fromRGB(240, 240, 245)
-    titleLabel.TextSize = 11
+    titleLabel.TextSize = 10
     titleLabel.Font = Enum.Font.SourceSansBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = titleBar
@@ -315,76 +298,89 @@ function TelekinesisSystem:CreateGUI()
     -- Control buttons (smaller)
     local minimizeButton = Instance.new("TextButton")
     minimizeButton.Name = "MinimizeButton"
-    minimizeButton.Size = UDim2.new(0, 20, 0, 20)
-    minimizeButton.Position = UDim2.new(1, -42, 0, 2.5)
+    minimizeButton.Size = UDim2.new(0, 18, 0, 18)
+    minimizeButton.Position = UDim2.new(1, -38, 0, 2)
     minimizeButton.BackgroundColor3 = Color3.fromRGB(100, 130, 240)
     minimizeButton.BorderSizePixel = 0
     minimizeButton.Text = "_"
     minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    minimizeButton.TextSize = 12
+    minimizeButton.TextSize = 11
     minimizeButton.Font = Enum.Font.SourceSansBold
     minimizeButton.Parent = titleBar
 
     local minimizeCorner = Instance.new("UICorner")
-    minimizeCorner.CornerRadius = UDim.new(0, 3)
+    minimizeCorner.CornerRadius = UDim.new(0, 2)
     minimizeCorner.Parent = minimizeButton
 
     local closeButton = Instance.new("TextButton")
     closeButton.Name = "CloseButton"
-    closeButton.Size = UDim2.new(0, 20, 0, 20)
-    closeButton.Position = UDim2.new(1, -20, 0, 2.5)
+    closeButton.Size = UDim2.new(0, 18, 0, 18)
+    closeButton.Position = UDim2.new(1, -18, 0, 2)
     closeButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
     closeButton.BorderSizePixel = 0
     closeButton.Text = "X"
     closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeButton.TextSize = 11
+    closeButton.TextSize = 10
     closeButton.Font = Enum.Font.SourceSansBold
     closeButton.Parent = titleBar
 
     local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 3)
+    closeCorner.CornerRadius = UDim.new(0, 2)
     closeCorner.Parent = closeButton
 
     -- Content Frame
     local contentFrame = Instance.new("Frame")
     contentFrame.Name = "ContentFrame"
-    contentFrame.Size = UDim2.new(1, -6, 1, -28)
-    contentFrame.Position = UDim2.new(0, 3, 0, 25)
+    contentFrame.Size = UDim2.new(1, -4, 1, -24)
+    contentFrame.Position = UDim2.new(0, 2, 0, 22)
     contentFrame.BackgroundTransparency = 1
     contentFrame.Parent = mainFrame
 
-    -- System Toggle (larger for mobile)
+    -- System Toggle (compact)
     local toggleButton = Instance.new("TextButton")
     toggleButton.Name = "ToggleButton"
-    toggleButton.Size = UDim2.new(1, 0, 0, 32)
+    toggleButton.Size = UDim2.new(1, 0, 0, 28)
     toggleButton.Position = UDim2.new(0, 0, 0, 0)
     toggleButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
     toggleButton.BorderSizePixel = 0
     toggleButton.Text = "Telekinesis: OFF"
     toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.TextSize = 12
+    toggleButton.TextSize = 11
     toggleButton.Font = Enum.Font.SourceSansBold
     toggleButton.Parent = contentFrame
 
     local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(0, 5)
+    toggleCorner.CornerRadius = UDim.new(0, 4)
     toggleCorner.Parent = toggleButton
 
-    -- Control Buttons Row (optimized layout)
-    local buttonsFrame = Instance.new("Frame")
-    buttonsFrame.Size = UDim2.new(1, 0, 0, 26)
-    buttonsFrame.Position = UDim2.new(0, 0, 0, 36)
-    buttonsFrame.BackgroundTransparency = 1
-    buttonsFrame.Parent = contentFrame
+    -- Control Buttons Row 1
+    local buttonsFrame1 = Instance.new("Frame")
+    buttonsFrame1.Size = UDim2.new(1, 0, 0, 22)
+    buttonsFrame1.Position = UDim2.new(0, 0, 0, 32)
+    buttonsFrame1.BackgroundTransparency = 1
+    buttonsFrame1.Parent = contentFrame
 
-    local buttonLayout = Instance.new("UIListLayout")
-    buttonLayout.FillDirection = Enum.FillDirection.Horizontal
-    buttonLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    buttonLayout.Padding = UDim.new(0, 2)
-    buttonLayout.Parent = buttonsFrame
+    local buttonLayout1 = Instance.new("UIListLayout")
+    buttonLayout1.FillDirection = Enum.FillDirection.Horizontal
+    buttonLayout1.SortOrder = Enum.SortOrder.LayoutOrder
+    buttonLayout1.Padding = UDim.new(0, 2)
+    buttonLayout1.Parent = buttonsFrame1
+
+    -- Control Buttons Row 2
+    local buttonsFrame2 = Instance.new("Frame")
+    buttonsFrame2.Size = UDim2.new(1, 0, 0, 22)
+    buttonsFrame2.Position = UDim2.new(0, 0, 0, 56)
+    buttonsFrame2.BackgroundTransparency = 1
+    buttonsFrame2.Parent = contentFrame
+
+    local buttonLayout2 = Instance.new("UIListLayout")
+    buttonLayout2.FillDirection = Enum.FillDirection.Horizontal
+    buttonLayout2.SortOrder = Enum.SortOrder.LayoutOrder
+    buttonLayout2.Padding = UDim.new(0, 2)
+    buttonLayout2.Parent = buttonsFrame2
 
     -- Create button helper
-    local function CreateControlButton(name, text, color, order)
+    local function CreateControlButton(name, text, color, order, parent)
         local button = Instance.new("TextButton")
         button.Name = name
         button.Size = UDim2.new(0.24, 0, 1, 0)
@@ -392,61 +388,64 @@ function TelekinesisSystem:CreateGUI()
         button.BorderSizePixel = 0
         button.Text = text
         button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.TextSize = 9
+        button.TextSize = 8
         button.Font = Enum.Font.SourceSansBold
         button.LayoutOrder = order
-        button.Parent = buttonsFrame
+        button.Parent = parent
 
         local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 4)
+        corner.CornerRadius = UDim.new(0, 3)
         corner.Parent = button
 
         return button
     end
 
-    local lockButton = CreateControlButton("LockButton", "Lock", Color3.fromRGB(100, 100, 100), 1)
-    local launchButton = CreateControlButton("LaunchButton", "Launch", Color3.fromRGB(80, 255, 80), 2)
-    local clearButton = CreateControlButton("ClearButton", "Clear", Color3.fromRGB(200, 100, 100), 3)
-    local decorButton = CreateControlButton("DecorButton", "Decor", Color3.fromRGB(150, 100, 255), 4)
+    local lockButton = CreateControlButton("LockButton", "Lock", Color3.fromRGB(100, 100, 100), 1, buttonsFrame1)
+    local launchButton = CreateControlButton("LaunchButton", "Launch", Color3.fromRGB(80, 255, 80), 2, buttonsFrame1)
+    local clearButton = CreateControlButton("ClearButton", "Clear", Color3.fromRGB(200, 100, 100), 3, buttonsFrame1)
+    local decorButton = CreateControlButton("DecorButton", "Decor", Color3.fromRGB(150, 100, 255), 4, buttonsFrame1)
+
+    local freezeButton = CreateControlButton("FreezeButton", "Freeze", Color3.fromRGB(100, 150, 200), 1, buttonsFrame2)
+    local decorTargetButton = CreateControlButton("DecorTargetButton", "Target: Player", Color3.fromRGB(255, 150, 100), 2, buttonsFrame2)
 
     -- Compact Input Section
     local inputFrame = Instance.new("Frame")
-    inputFrame.Size = UDim2.new(1, 0, 0, 70)
-    inputFrame.Position = UDim2.new(0, 0, 0, 66)
+    inputFrame.Size = UDim2.new(1, 0, 0, 46)
+    inputFrame.Position = UDim2.new(0, 0, 0, 82)
     inputFrame.BackgroundTransparency = 1
     inputFrame.Parent = contentFrame
 
     local function CreateInput(name, defaultValue, position)
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(0.48, 0, 0, 20)
+        frame.Size = UDim2.new(0.48, 0, 0, 18)
         frame.Position = position
         frame.BackgroundTransparency = 1
         frame.Parent = inputFrame
 
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0.45, 0, 1, 0)
+        label.Size = UDim2.new(0.4, 0, 1, 0)
         label.Position = UDim2.new(0, 0, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = name
         label.TextColor3 = Color3.fromRGB(240, 240, 245)
-        label.TextSize = 9
+        label.TextSize = 8
         label.Font = Enum.Font.SourceSans
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = frame
 
         local textBox = Instance.new("TextBox")
-        textBox.Size = UDim2.new(0.5, 0, 0.9, 0)
-        textBox.Position = UDim2.new(0.48, 0, 0.05, 0)
+        textBox.Size = UDim2.new(0.55, 0, 0.9, 0)
+        textBox.Position = UDim2.new(0.42, 0, 0.05, 0)
         textBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
         textBox.BorderSizePixel = 0
         textBox.Text = tostring(defaultValue)
         textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-        textBox.TextSize = 9
+        textBox.TextSize = 8
         textBox.Font = Enum.Font.SourceSans
         textBox.Parent = frame
 
         local boxCorner = Instance.new("UICorner")
-        boxCorner.CornerRadius = UDim.new(0, 3)
+        boxCorner.CornerRadius = UDim.new(0, 2)
         boxCorner.Parent = textBox
 
         return textBox
@@ -454,72 +453,72 @@ function TelekinesisSystem:CreateGUI()
 
     local distanceInput = CreateInput("Dist:", self.distance, UDim2.new(0, 0, 0, 0))
     local forceInput = CreateInput("Force:", self.launchForce, UDim2.new(0.52, 0, 0, 0))
-    local speedInput = CreateInput("Speed:", self.movementSpeed, UDim2.new(0, 0, 0, 24))
+    local speedInput = CreateInput("Speed:", self.movementSpeed, UDim2.new(0, 0, 0, 20))
 
     -- Decoration Selection
     local decorFrame = Instance.new("Frame")
-    decorFrame.Size = UDim2.new(0.48, 0, 0, 20)
-    decorFrame.Position = UDim2.new(0.52, 0, 0, 24)
+    decorFrame.Size = UDim2.new(0.48, 0, 0, 18)
+    decorFrame.Position = UDim2.new(0.52, 0, 0, 20)
     decorFrame.BackgroundTransparency = 1
     decorFrame.Parent = inputFrame
 
     local decorLabel = Instance.new("TextLabel")
-    decorLabel.Size = UDim2.new(0.45, 0, 1, 0)
+    decorLabel.Size = UDim2.new(0.4, 0, 1, 0)
     decorLabel.Position = UDim2.new(0, 0, 0, 0)
     decorLabel.BackgroundTransparency = 1
     decorLabel.Text = "Style:"
     decorLabel.TextColor3 = Color3.fromRGB(240, 240, 245)
-    decorLabel.TextSize = 9
+    decorLabel.TextSize = 8
     decorLabel.Font = Enum.Font.SourceSans
     decorLabel.TextXAlignment = Enum.TextXAlignment.Left
     decorLabel.Parent = decorFrame
 
     local decorDropdown = Instance.new("TextButton")
     decorDropdown.Name = "DecorDropdown"
-    decorDropdown.Size = UDim2.new(0.5, 0, 0.9, 0)
-    decorDropdown.Position = UDim2.new(0.48, 0, 0.05, 0)
+    decorDropdown.Size = UDim2.new(0.55, 0, 0.9, 0)
+    decorDropdown.Position = UDim2.new(0.42, 0, 0.05, 0)
     decorDropdown.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
     decorDropdown.BorderSizePixel = 0
     decorDropdown.Text = "Rainbow"
     decorDropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
-    decorDropdown.TextSize = 8
+    decorDropdown.TextSize = 7
     decorDropdown.Font = Enum.Font.SourceSans
     decorDropdown.Parent = decorFrame
 
     local decorCorner = Instance.new("UICorner")
-    decorCorner.CornerRadius = UDim.new(0, 3)
+    decorCorner.CornerRadius = UDim.new(0, 2)
     decorCorner.Parent = decorDropdown
 
     -- Selected Objects Section (compact)
     local selectedLabel = Instance.new("TextLabel")
     selectedLabel.Name = "SelectedLabel"
-    selectedLabel.Size = UDim2.new(1, 0, 0, 18)
-    selectedLabel.Position = UDim2.new(0, 0, 0, 145)
+    selectedLabel.Size = UDim2.new(1, 0, 0, 16)
+    selectedLabel.Position = UDim2.new(0, 0, 0, 132)
     selectedLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     selectedLabel.BorderSizePixel = 0
     selectedLabel.Text = "Selected: 0"
     selectedLabel.TextColor3 = Color3.fromRGB(240, 240, 245)
-    selectedLabel.TextSize = 10
+    selectedLabel.TextSize = 9
     selectedLabel.Font = Enum.Font.SourceSansBold
     selectedLabel.Parent = contentFrame
 
     local selectedCorner = Instance.new("UICorner")
-    selectedCorner.CornerRadius = UDim.new(0, 3)
+    selectedCorner.CornerRadius = UDim.new(0, 2)
     selectedCorner.Parent = selectedLabel
 
     -- Selected Objects List (smaller)
     local selectedFrame = Instance.new("ScrollingFrame")
     selectedFrame.Name = "SelectedFrame"
-    selectedFrame.Size = UDim2.new(1, 0, 0, 80)
-    selectedFrame.Position = UDim2.new(0, 0, 0, 167)
+    selectedFrame.Size = UDim2.new(1, 0, 0, 50)
+    selectedFrame.Position = UDim2.new(0, 0, 0, 150)
     selectedFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
     selectedFrame.BorderSizePixel = 0
-    selectedFrame.ScrollBarThickness = 3
+    selectedFrame.ScrollBarThickness = 2
     selectedFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     selectedFrame.Parent = contentFrame
 
     local selectedFrameCorner = Instance.new("UICorner")
-    selectedFrameCorner.CornerRadius = UDim.new(0, 3)
+    selectedFrameCorner.CornerRadius = UDim.new(0, 2)
     selectedFrameCorner.Parent = selectedFrame
 
     local selectedLayout = Instance.new("UIListLayout")
@@ -530,14 +529,14 @@ function TelekinesisSystem:CreateGUI()
 
     -- Nearby Section (bottom, compact)
     local nearbyHeader = Instance.new("Frame")
-    nearbyHeader.Size = UDim2.new(1, 0, 0, 22)
-    nearbyHeader.Position = UDim2.new(0, 0, 0, 252)
+    nearbyHeader.Size = UDim2.new(1, 0, 0, 18)
+    nearbyHeader.Position = UDim2.new(0, 0, 0, 204)
     nearbyHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
     nearbyHeader.BorderSizePixel = 0
     nearbyHeader.Parent = contentFrame
 
     local nearbyCorner = Instance.new("UICorner")
-    nearbyCorner.CornerRadius = UDim.new(0, 3)
+    nearbyCorner.CornerRadius = UDim.new(0, 2)
     nearbyCorner.Parent = nearbyHeader
 
     local nearbyDropdown = Instance.new("TextButton")
@@ -547,7 +546,7 @@ function TelekinesisSystem:CreateGUI()
     nearbyDropdown.BackgroundTransparency = 1
     nearbyDropdown.Text = "Nearby: 0"
     nearbyDropdown.TextColor3 = Color3.fromRGB(240, 240, 245)
-    nearbyDropdown.TextSize = 10
+    nearbyDropdown.TextSize = 9
     nearbyDropdown.Font = Enum.Font.SourceSans
     nearbyDropdown.TextXAlignment = Enum.TextXAlignment.Left
     nearbyDropdown.Parent = nearbyHeader
@@ -560,7 +559,7 @@ function TelekinesisSystem:CreateGUI()
     selectAllButton.BorderSizePixel = 0
     selectAllButton.Text = "Select All"
     selectAllButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    selectAllButton.TextSize = 9
+    selectAllButton.TextSize = 8
     selectAllButton.Font = Enum.Font.SourceSansBold
     selectAllButton.Parent = nearbyHeader
 
@@ -571,17 +570,17 @@ function TelekinesisSystem:CreateGUI()
     -- Dropdown List (compact)
     local dropdownFrame = Instance.new("ScrollingFrame")
     dropdownFrame.Name = "DropdownFrame"
-    dropdownFrame.Size = UDim2.new(1, 0, 0, 60)
-    dropdownFrame.Position = UDim2.new(0, 0, 0, 277)
+    dropdownFrame.Size = UDim2.new(1, 0, 0, 50)
+    dropdownFrame.Position = UDim2.new(0, 0, 0, 225)
     dropdownFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     dropdownFrame.BorderSizePixel = 0
-    dropdownFrame.ScrollBarThickness = 3
+    dropdownFrame.ScrollBarThickness = 2
     dropdownFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     dropdownFrame.Visible = false
     dropdownFrame.Parent = contentFrame
 
     local dropdownCorner = Instance.new("UICorner")
-    dropdownCorner.CornerRadius = UDim.new(0, 3)
+    dropdownCorner.CornerRadius = UDim.new(0, 2)
     dropdownCorner.Parent = dropdownFrame
 
     local dropdownLayout = Instance.new("UIListLayout")
@@ -600,6 +599,8 @@ function TelekinesisSystem:CreateGUI()
         launchButton = launchButton,
         clearButton = clearButton,
         decorButton = decorButton,
+        freezeButton = freezeButton,
+        decorTargetButton = decorTargetButton,
         distanceInput = distanceInput,
         forceInput = forceInput,
         speedInput = speedInput,
@@ -639,6 +640,14 @@ function TelekinesisSystem:ConnectGUIEvents()
 
     gui.decorButton.MouseButton1Click:Connect(function()
         self:ToggleDecorations()
+    end)
+
+    gui.freezeButton.MouseButton1Click:Connect(function()
+        self:ToggleOrientationLock()
+    end)
+
+    gui.decorTargetButton.MouseButton1Click:Connect(function()
+        self:ToggleDecorTarget()
     end)
 
     gui.decorDropdown.MouseButton1Click:Connect(function()
@@ -690,6 +699,41 @@ function TelekinesisSystem:ConnectGUIEvents()
     end)
 end
 
+function TelekinesisSystem:ToggleDecorTarget()
+    if self.decorTarget == "Player" then
+        self.decorTarget = "Primary"
+        self.gui.decorTargetButton.Text = "Target: Primary"
+        self.gui.decorTargetButton.BackgroundColor3 = Color3.fromRGB(255, 200, 100)
+    else
+        self.decorTarget = "Player"
+        self.gui.decorTargetButton.Text = "Target: Player"
+        self.gui.decorTargetButton.BackgroundColor3 = Color3.fromRGB(255, 150, 100)
+    end
+    
+    -- Update decorations if active
+    if self.decorationEnabled and #self.selectedObjects > 0 then
+        self:UpdateDecorations()
+    end
+end
+
+function TelekinesisSystem:UpdateDecorations()
+    if not self.decorationEnabled or #self.selectedObjects == 0 then return end
+    
+    local targetObject = nil
+    if self.decorTarget == "Player" then
+        local character = player.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            targetObject = character.HumanoidRootPart
+        end
+    else
+        targetObject = self.primaryObject
+    end
+    
+    if targetObject then
+        DecorationSystem:CreateEffect(self.selectedObjects, self.currentDecoration, targetObject)
+    end
+end
+
 function TelekinesisSystem:ToggleDecorations()
     self.decorationEnabled = not self.decorationEnabled
     local gui = self.gui
@@ -697,15 +741,55 @@ function TelekinesisSystem:ToggleDecorations()
     if self.decorationEnabled then
         gui.decorButton.Text = "Decor: ON"
         gui.decorButton.BackgroundColor3 = Color3.fromRGB(80, 255, 80)
-        -- Apply decorations to selected objects
-        for _, obj in pairs(self.selectedObjects) do
-            DecorationSystem:CreateEffect(obj, self.currentDecoration)
-        end
+        self:UpdateDecorations()
     else
         gui.decorButton.Text = "Decor: OFF"
         gui.decorButton.BackgroundColor3 = Color3.fromRGB(150, 100, 255)
-        -- Remove all decorations
         DecorationSystem:RemoveAllEffects()
+    end
+end
+
+function TelekinesisSystem:ToggleOrientationLock()
+    self.orientationLocked = not self.orientationLocked
+    local gui = self.gui
+
+    if self.orientationLocked then
+        gui.freezeButton.Text = "Freeze: ON"
+        gui.freezeButton.BackgroundColor3 = Color3.fromRGB(80, 180, 255)
+        for _, obj in pairs(self.selectedObjects) do
+            self.frozenOrientations[obj] = true
+            self:FreezeObjectOrientation(obj)
+        end
+    else
+        gui.freezeButton.Text = "Freeze: OFF"
+        gui.freezeButton.BackgroundColor3 = Color3.fromRGB(100, 150, 200)
+        self:UnfreezeAllOrientations()
+    end
+    self:UpdateSelectedObjectsList()
+end
+
+function TelekinesisSystem:FreezeObjectOrientation(obj)
+    if not obj or not obj.Parent then return end
+    
+    local bodyAngularVelocity = obj:FindFirstChild("TelekinesisFreeze")
+    if not bodyAngularVelocity then
+        bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+        bodyAngularVelocity.Name = "TelekinesisFreeze"
+        bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+        bodyAngularVelocity.Parent = obj
+    end
+end
+
+function TelekinesisSystem:UnfreezeAllOrientations()
+    self.frozenOrientations = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            local freezeConstraint = obj:FindFirstChild("TelekinesisFreeze")
+            if freezeConstraint then
+                freezeConstraint:Destroy()
+            end
+        end
     end
 end
 
@@ -724,11 +808,9 @@ function TelekinesisSystem:CycleDecoration()
     self.currentDecoration = types[nextIndex]
     self.gui.decorDropdown.Text = self.currentDecoration
     
-    -- Update decorations for selected objects
+    -- Update decorations if enabled
     if self.decorationEnabled then
-        for _, obj in pairs(self.selectedObjects) do
-            DecorationSystem:CreateEffect(obj, self.currentDecoration)
-        end
+        self:UpdateDecorations()
     end
 end
 
@@ -781,11 +863,11 @@ function TelekinesisSystem:ToggleCompact()
     local gui = self.gui
 
     if self.isCompact then
-        gui.mainFrame.Size = UDim2.new(0, 220, 0, 50)
+        gui.mainFrame.Size = UDim2.new(0, 200, 0, 40)
         gui.contentFrame.Visible = false
         gui.minimizeButton.Text = "+"
     else
-        gui.mainFrame.Size = UDim2.new(0, 220, 0, 340)
+        gui.mainFrame.Size = UDim2.new(0, 200, 0, 280)
         gui.contentFrame.Visible = true
         gui.minimizeButton.Text = "_"
     end
@@ -798,10 +880,10 @@ function TelekinesisSystem:ToggleDropdown()
     gui.dropdownFrame.Visible = self.dropdownOpen
     
     if self.dropdownOpen then
-        gui.nearbyDropdown.Text = "Nearby: " .. #self.nearbyParts .. " â–²"
+        gui.nearbyDropdown.Text = "Nearby: " .. #self.nearbyParts
         self:UpdateDropdownList()
     else
-        gui.nearbyDropdown.Text = "Nearby: " .. #self.nearbyParts .. " â–¼"
+        gui.nearbyDropdown.Text = "Nearby: " .. #self.nearbyParts
     end
 end
 
@@ -816,12 +898,12 @@ function TelekinesisSystem:UpdateDropdownList()
     
     for i, part in pairs(self.nearbyParts) do
         local item = Instance.new("TextButton")
-        item.Size = UDim2.new(1, -4, 0, 14)
+        item.Size = UDim2.new(1, -4, 0, 12)
         item.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
         item.BorderSizePixel = 0
         item.Text = part.Name
         item.TextColor3 = Color3.fromRGB(255, 255, 255)
-        item.TextSize = 8
+        item.TextSize = 7
         item.Font = Enum.Font.SourceSans
         item.Parent = gui.dropdownFrame
         
@@ -834,7 +916,7 @@ function TelekinesisSystem:UpdateDropdownList()
         end)
     end
     
-    gui.dropdownFrame.CanvasSize = UDim2.new(0, 0, 0, #self.nearbyParts * 15)
+    gui.dropdownFrame.CanvasSize = UDim2.new(0, 0, 0, #self.nearbyParts * 13)
 end
 
 function TelekinesisSystem:SelectAllNearby()
@@ -843,11 +925,14 @@ function TelekinesisSystem:SelectAllNearby()
             self:SelectObject(part)
         end
     end
-    self:ToggleDropdown()
+    if self.dropdownOpen then
+        self:ToggleDropdown()
+    end
 end
 
 function TelekinesisSystem:ClearAllSelected()
     DecorationSystem:RemoveAllEffects()
+    self:UnfreezeAllOrientations()
     self:ReleaseAllObjects()
     self.selectedObjects = {}
     self.primaryObject = nil
@@ -872,9 +957,10 @@ function TelekinesisSystem:UpdateSelectedObjectsList()
     for i, obj in pairs(self.selectedObjects) do
         local isPrimary = obj == self.primaryObject
         local isLocked = self.lockedObjects[obj] or false
+        local isFrozen = self.frozenOrientations[obj] or false
         
         local itemFrame = Instance.new("Frame")
-        itemFrame.Size = UDim2.new(1, -4, 0, 18)
+        itemFrame.Size = UDim2.new(1, -4, 0, 14)
         itemFrame.BackgroundColor3 = isPrimary and Color3.fromRGB(60, 60, 120) or (isLocked and Color3.fromRGB(60, 40, 40) or Color3.fromRGB(40, 40, 45))
         itemFrame.BorderSizePixel = 0
         itemFrame.Parent = gui.selectedFrame
@@ -884,25 +970,25 @@ function TelekinesisSystem:UpdateSelectedObjectsList()
         itemCorner.Parent = itemFrame
         
         local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(0.4, 0, 1, 0)
+        nameLabel.Size = UDim2.new(0.35, 0, 1, 0)
         nameLabel.Position = UDim2.new(0, 2, 0, 0)
         nameLabel.BackgroundTransparency = 1
         nameLabel.Text = obj.Name
         nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nameLabel.TextSize = 8
+        nameLabel.TextSize = 7
         nameLabel.Font = Enum.Font.SourceSans
         nameLabel.TextXAlignment = Enum.TextXAlignment.Left
         nameLabel.Parent = itemFrame
         
-        -- Primary button
+        -- Primary button (can be toggled off)
         local primaryBtn = Instance.new("TextButton")
         primaryBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
-        primaryBtn.Position = UDim2.new(0.42, 0, 0.1, 0)
+        primaryBtn.Position = UDim2.new(0.37, 0, 0.1, 0)
         primaryBtn.BackgroundColor3 = isPrimary and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(80, 80, 80)
         primaryBtn.BorderSizePixel = 0
         primaryBtn.Text = "P"
         primaryBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        primaryBtn.TextSize = 8
+        primaryBtn.TextSize = 7
         primaryBtn.Font = Enum.Font.SourceSansBold
         primaryBtn.Parent = itemFrame
         
@@ -921,12 +1007,12 @@ function TelekinesisSystem:UpdateSelectedObjectsList()
         -- Lock button
         local lockBtn = Instance.new("TextButton")
         lockBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
-        lockBtn.Position = UDim2.new(0.56, 0, 0.1, 0)
+        lockBtn.Position = UDim2.new(0.51, 0, 0.1, 0)
         lockBtn.BackgroundColor3 = isLocked and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 100, 100)
         lockBtn.BorderSizePixel = 0
         lockBtn.Text = "L"
         lockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        lockBtn.TextSize = 8
+        lockBtn.TextSize = 7
         lockBtn.Font = Enum.Font.SourceSansBold
         lockBtn.Parent = itemFrame
         
@@ -938,35 +1024,35 @@ function TelekinesisSystem:UpdateSelectedObjectsList()
             self:ToggleObjectLock(obj)
         end)
         
-        -- Launch button
-        local launchBtn = Instance.new("TextButton")
-        launchBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
-        launchBtn.Position = UDim2.new(0.7, 0, 0.1, 0)
-        launchBtn.BackgroundColor3 = Color3.fromRGB(255, 140, 100)
-        launchBtn.BorderSizePixel = 0
-        launchBtn.Text = "T"
-        launchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        launchBtn.TextSize = 8
-        launchBtn.Font = Enum.Font.SourceSansBold
-        launchBtn.Parent = itemFrame
+        -- Freeze orientation button
+        local freezeBtn = Instance.new("TextButton")
+        freezeBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
+        freezeBtn.Position = UDim2.new(0.65, 0, 0.1, 0)
+        freezeBtn.BackgroundColor3 = isFrozen and Color3.fromRGB(100, 180, 255) or Color3.fromRGB(100, 100, 100)
+        freezeBtn.BorderSizePixel = 0
+        freezeBtn.Text = "F"
+        freezeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        freezeBtn.TextSize = 7
+        freezeBtn.Font = Enum.Font.SourceSansBold
+        freezeBtn.Parent = itemFrame
         
-        local launchCorner = Instance.new("UICorner")
-        launchCorner.CornerRadius = UDim.new(0, 1)
-        launchCorner.Parent = launchBtn
+        local freezeCorner = Instance.new("UICorner")
+        freezeCorner.CornerRadius = UDim.new(0, 1)
+        freezeCorner.Parent = freezeBtn
         
-        launchBtn.MouseButton1Click:Connect(function()
-            self:LaunchSingleObject(obj)
+        freezeBtn.MouseButton1Click:Connect(function()
+            self:ToggleObjectOrientationLock(obj)
         end)
         
         -- Remove button
         local removeBtn = Instance.new("TextButton")
         removeBtn.Size = UDim2.new(0.12, 0, 0.8, 0)
-        removeBtn.Position = UDim2.new(0.84, 0, 0.1, 0)
+        removeBtn.Position = UDim2.new(0.79, 0, 0.1, 0)
         removeBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
         removeBtn.BorderSizePixel = 0
         removeBtn.Text = "X"
         removeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        removeBtn.TextSize = 8
+        removeBtn.TextSize = 7
         removeBtn.Font = Enum.Font.SourceSansBold
         removeBtn.Parent = itemFrame
         
@@ -979,7 +1065,21 @@ function TelekinesisSystem:UpdateSelectedObjectsList()
         end)
     end
     
-    gui.selectedFrame.CanvasSize = UDim2.new(0, 0, 0, #self.selectedObjects * 19)
+    gui.selectedFrame.CanvasSize = UDim2.new(0, 0, 0, #self.selectedObjects * 15)
+end
+
+function TelekinesisSystem:ToggleObjectOrientationLock(obj)
+    if self.frozenOrientations[obj] then
+        self.frozenOrientations[obj] = nil
+        local freezeConstraint = obj:FindFirstChild("TelekinesisFreeze")
+        if freezeConstraint then
+            freezeConstraint:Destroy()
+        end
+    else
+        self.frozenOrientations[obj] = true
+        self:FreezeObjectOrientation(obj)
+    end
+    self:UpdateSelectedObjectsList()
 end
 
 function TelekinesisSystem:SetPrimaryObject(obj)
@@ -1006,6 +1106,11 @@ function TelekinesisSystem:SetPrimaryObject(obj)
         end
     end
     
+    -- Update decorations if enabled
+    if self.decorationEnabled then
+        self:UpdateDecorations()
+    end
+    
     self:UpdateSelectedObjectsList()
 end
 
@@ -1028,6 +1133,10 @@ function TelekinesisSystem:SetNonPrimaryObject(obj)
             self.movementLocked = true
             self.gui.lockButton.Text = "LOCKED"
             self.gui.lockButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+            -- Stop decorations when no primary object
+            if self.decorationEnabled then
+                DecorationSystem:RemoveAllEffects()
+            end
         end
         
         self:UpdateSelectedObjectsList()
@@ -1071,8 +1180,11 @@ function TelekinesisSystem:LaunchSingleObject(obj)
 end
 
 function TelekinesisSystem:RemoveSingleObject(obj)
-    -- Remove decoration effect
-    DecorationSystem:RemoveEffect(obj)
+    -- Remove freeze constraint
+    local freezeConstraint = obj:FindFirstChild("TelekinesisFreeze")
+    if freezeConstraint then
+        freezeConstraint:Destroy()
+    end
     
     for i, selectedObj in pairs(self.selectedObjects) do
         if selectedObj == obj then
@@ -1091,10 +1203,22 @@ function TelekinesisSystem:RemoveSingleObject(obj)
         self.selectionBoxes[obj] = nil
     end
     
+    self.frozenOrientations[obj] = nil
+    
     if self.primaryObject == obj then
         self.primaryObject = self.selectedObjects[1] or nil
         if self.primaryObject then
             self:SetPrimaryObject(self.primaryObject)
+        else
+            -- Update decorations when no objects left
+            if self.decorationEnabled then
+                DecorationSystem:RemoveAllEffects()
+            end
+        end
+    else
+        -- Update decorations when object is removed
+        if self.decorationEnabled then
+            self:UpdateDecorations()
         end
     end
     
@@ -1103,8 +1227,6 @@ end
 
 function TelekinesisSystem:StartNearbyPartsScanning()
     RunService.Heartbeat:Connect(function()
-        if not self.enabled then return end
-        
         local character = player.Character
         if not character or not character:FindFirstChild("HumanoidRootPart") then return end
         
@@ -1118,11 +1240,7 @@ function TelekinesisSystem:StartNearbyPartsScanning()
         end
         
         self.nearbyParts = nearbyParts
-        if self.dropdownOpen then
-            self.gui.nearbyDropdown.Text = "Nearby: " .. #nearbyParts .. " â–²"
-        else
-            self.gui.nearbyDropdown.Text = "Nearby: " .. #nearbyParts .. " â–¼"
-        end
+        self.gui.nearbyDropdown.Text = "Nearby: " .. #nearbyParts
     end)
 end
 
@@ -1146,13 +1264,6 @@ function TelekinesisSystem:SetupInputHandlers()
         UserInputService.TouchEnded:Connect(function(touch, gameProcessed)
             if gameProcessed or not self.enabled then return end
             self:OnTouchEnd()
-        end)
-
-        UserInputService.TouchLongPress:Connect(function(touchPositions, state, gameProcessed)
-            if gameProcessed or not self.enabled or not self.launchEnabled then return end
-            if state == Enum.UserInputState.Begin and self.primaryObject then
-                self:LaunchObject()
-            end
         end)
     end
 
@@ -1189,20 +1300,14 @@ function TelekinesisSystem:SetupInputHandlers()
         elseif key == Enum.KeyCode.L then
             self:ToggleMovementLock()
         elseif key == Enum.KeyCode.G then
-            self:ToggleLaunch()
+            -- Fixed launch functionality
+            if self.launchEnabled and #self.selectedObjects > 0 then
+                self:LaunchObject()
+            end
         elseif key == Enum.KeyCode.V then
             self:ToggleDecorations()
         elseif key == Enum.KeyCode.B then
             self:CycleDecoration()
-        elseif key == Enum.KeyCode.Y then
-            self.distance = 100
-            self.gui.distanceInput.Text = "100"
-        elseif key == Enum.KeyCode.X then
-            self.distance = 15
-            self.gui.distanceInput.Text = "15"
-        elseif key == Enum.KeyCode.J then
-            self.distance = 5000
-            self.gui.distanceInput.Text = "5000"
         end
     end)
 
@@ -1233,38 +1338,17 @@ function TelekinesisSystem:OnMouseDown()
 
     local target = mouse.Target
     if target and self:CanSelectObject(target) then
+        -- Start hold timer for selection
         spawn(function()
             wait(self.holdThreshold)
             if self.mousedown and target == mouse.Target then
-                if self.launchEnabled then
-                    wait(1.0)
-                    if self.mousedown and target == mouse.Target then
-                        self:LaunchObject()
-                    end
-                else
-                    self:SelectObject(target)
-                end
+                self:SelectObject(target)
             end
         end)
-        
-        if not self.launchEnabled then
-            spawn(function()
-                wait(self.holdThreshold)
-                if self.mousedown and target == mouse.Target then
-                    self:SelectObject(target)
-                end
-            end)
-        end
     end
 end
 
 function TelekinesisSystem:OnMouseUp()
-    if not self.launchEnabled and self.mousedown and (tick() - self.holdStartTime) < self.holdThreshold then
-        local target = mouse.Target
-        if target and self:CanSelectObject(target) then
-            self:SelectObject(target)
-        end
-    end
     self.mousedown = false
 end
 
@@ -1286,37 +1370,17 @@ function TelekinesisSystem:OnTouchStart()
     if raycastResult then
         local target = raycastResult.Instance
         if self:CanSelectObject(target) then
-            if not self.launchEnabled then
-                spawn(function()
-                    wait(self.holdThreshold)
-                    if self.mousedown then
-                        self:SelectObject(target)
-                    end
-                end)
-            end
+            spawn(function()
+                wait(self.holdThreshold)
+                if self.mousedown then
+                    self:SelectObject(target)
+                end
+            end)
         end
     end
 end
 
 function TelekinesisSystem:OnTouchEnd()
-    if not self.launchEnabled and self.mousedown and (tick() - self.holdStartTime) < self.holdThreshold then
-        local camera = workspace.CurrentCamera
-        local screenCenter = camera.ViewportSize / 2
-        local unitRay = camera:ScreenPointToRay(screenCenter.X, screenCenter.Y)
-
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterDescendantsInstances = {player.Character}
-        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-        local raycastResult = workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, raycastParams)
-
-        if raycastResult then
-            local target = raycastResult.Instance
-            if self:CanSelectObject(target) then
-                self:SelectObject(target)
-            end
-        end
-    end
     self.mousedown = false
 end
 
@@ -1358,9 +1422,9 @@ function TelekinesisSystem:SelectObject(obj)
     selectionBox.Parent = obj
     self.selectionBoxes[obj] = selectionBox
 
-    -- Apply decoration if enabled
+    -- Update decorations if enabled
     if self.decorationEnabled then
-        DecorationSystem:CreateEffect(obj, self.currentDecoration)
+        self:UpdateDecorations()
     end
 
     self:UpdateSelectedLabel()
@@ -1384,7 +1448,7 @@ function TelekinesisSystem:ReleaseAllObjects()
 end
 
 function TelekinesisSystem:LaunchObject()
-    if not self.primaryObject or not self.launchEnabled then return end
+    if not self.launchEnabled or #self.selectedObjects == 0 then return end
 
     local character = player.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return end
@@ -1408,10 +1472,9 @@ function TelekinesisSystem:LaunchObject()
             self.selectionBoxes[obj]:Destroy()
             self.selectionBoxes[obj] = nil
         end
-        
-        DecorationSystem:RemoveEffect(obj)
     end
 
+    DecorationSystem:RemoveAllEffects()
     self.selectedObjects = {}
     self.primaryObject = nil
     self:UpdateSelectedLabel()
@@ -1496,17 +1559,15 @@ RunService.Heartbeat:Connect(function()
     telekinesisSystem:Update()
 end)
 
--- Sound notification
-local Sound = Instance.new("Sound", workspace)
-Sound.SoundId = "rbxassetid://18604320771"
-Sound:Play()
-
-print("Enhanced Telekinesis Pro v4 Loaded!")
+print("Enhanced Telekinesis Pro v6 Loaded!")
 print("=== CONTROLS ===")
-print("T: Toggle System | Hold: Select Objects")
+print("T: Toggle System | Hold 0.8s: Select Objects")
 print("WASD+Q/E: Move Objects | F: Free Movement")
-print("R: Clear All | L: Lock Movement | G: Toggle Launch")
+print("R: Clear All | L: Lock Movement | G: Launch Objects")
 print("V: Toggle Decorations | B: Cycle Effects")
-print("Mobile: Touch controls supported")
-print("=== DECORATIONS ===")
-print("8 Effect Types: Rainbow, Orbit, Pulse, Spin, Float, Glow, Trail, Bubble")
+print("=== NEW FEATURES ===")
+print("- Hold-to-select mechanism")
+print("- Block orbit decorations around player/primary")
+print("- Decor target selection (Player/Primary)")
+print("- Fixed launch functionality")
+print("- Clean GUI without encoding issues")
