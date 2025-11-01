@@ -1,0 +1,577 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Configuration
+local teleportDistance = 5
+local teleportLoopEnabled = false
+local viewedPlayer = nil
+local teamCheckEnabled = false
+
+-- Create GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ViewPlayerCamGUI"
+ScreenGui.Parent = playerGui
+ScreenGui.ResetOnSpawn = false
+
+-- Player List Frame (compact and collapsible)
+local PlayerListFrame = Instance.new("Frame")
+PlayerListFrame.Name = "PlayerListFrame"
+PlayerListFrame.Size = UDim2.new(0, 180, 0, 215)
+PlayerListFrame.Position = UDim2.new(0, 200, 0, 10)
+PlayerListFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+PlayerListFrame.BorderSizePixel = 1
+PlayerListFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+PlayerListFrame.Active = true
+PlayerListFrame.Draggable = true
+PlayerListFrame.Parent = ScreenGui
+
+local listCorner = Instance.new("UICorner")
+listCorner.CornerRadius = UDim.new(0, 6)
+listCorner.Parent = PlayerListFrame
+
+-- Title Bar for Player List
+local listTitleBar = Instance.new("Frame")
+listTitleBar.Name = "TitleBar"
+listTitleBar.Size = UDim2.new(1, 0, 0, 20)
+listTitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+listTitleBar.BorderSizePixel = 0
+listTitleBar.Parent = PlayerListFrame
+
+local listTitleCorner = Instance.new("UICorner")
+listTitleCorner.CornerRadius = UDim.new(0, 6)
+listTitleCorner.Parent = listTitleBar
+
+local listTitle = Instance.new("TextLabel")
+listTitle.Size = UDim2.new(1, -40, 1, 0)
+listTitle.BackgroundTransparency = 1
+listTitle.Text = "PLAYER LIST"
+listTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+listTitle.TextSize = 10
+listTitle.Font = Enum.Font.GothamBold
+listTitle.Parent = listTitleBar
+
+-- Collapse Button for Player List
+local listCollapse = Instance.new("TextButton")
+listCollapse.Size = UDim2.new(0, 16, 0, 16)
+listCollapse.Position = UDim2.new(1, -18, 0, 2)
+listCollapse.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+listCollapse.BorderSizePixel = 0
+listCollapse.Text = "-"
+listCollapse.TextColor3 = Color3.fromRGB(255, 255, 255)
+listCollapse.TextSize = 12
+listCollapse.Font = Enum.Font.GothamBold
+listCollapse.Parent = listTitleBar
+
+local listCollapseCorner = Instance.new("UICorner")
+listCollapseCorner.CornerRadius = UDim.new(0, 3)
+listCollapseCorner.Parent = listCollapse
+
+-- Player List Content
+local listContent = Instance.new("Frame")
+listContent.Name = "Content"
+listContent.Size = UDim2.new(1, -8, 1, -24)
+listContent.Position = UDim2.new(0, 4, 0, 22)
+listContent.BackgroundTransparency = 1
+listContent.Parent = PlayerListFrame
+
+-- Team Check Toggle
+local TeamCheckButton = Instance.new("TextButton")
+TeamCheckButton.Size = UDim2.new(1, 0, 0, 20)
+TeamCheckButton.Position = UDim2.new(0, 0, 0, 0)
+TeamCheckButton.Text = "TEAM CHECK: OFF"
+TeamCheckButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+TeamCheckButton.TextColor3 = Color3.fromRGB(150, 150, 150)
+TeamCheckButton.Font = Enum.Font.GothamBold
+TeamCheckButton.TextSize = 8
+TeamCheckButton.BorderSizePixel = 0
+TeamCheckButton.Parent = listContent
+
+local teamCheckCorner = Instance.new("UICorner")
+teamCheckCorner.CornerRadius = UDim.new(0, 4)
+teamCheckCorner.Parent = TeamCheckButton
+
+-- Player ScrollFrame
+local PlayerScrollFrame = Instance.new("ScrollingFrame")
+PlayerScrollFrame.Size = UDim2.new(1, 0, 1, -24)
+PlayerScrollFrame.Position = UDim2.new(0, 0, 0, 24)
+PlayerScrollFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+PlayerScrollFrame.BorderSizePixel = 0
+PlayerScrollFrame.ScrollBarThickness = 4
+PlayerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+PlayerScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+PlayerScrollFrame.Parent = listContent
+
+local scrollCorner = Instance.new("UICorner")
+scrollCorner.CornerRadius = UDim.new(0, 4)
+scrollCorner.Parent = PlayerScrollFrame
+
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.SortOrder = Enum.SortOrder.Name
+ListLayout.Padding = UDim.new(0, 2)
+ListLayout.Parent = PlayerScrollFrame
+
+-- Control Panel Frame (draggable and collapsible)
+local ControlPanel = Instance.new("Frame")
+ControlPanel.Name = "ControlPanel"
+ControlPanel.Size = UDim2.new(0, 180, 0, 90)
+ControlPanel.Position = UDim2.new(0, 200, 0, 230)
+ControlPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+ControlPanel.BorderSizePixel = 1
+ControlPanel.BorderColor3 = Color3.fromRGB(100, 100, 100)
+ControlPanel.Active = true
+ControlPanel.Draggable = true
+ControlPanel.Visible = false
+ControlPanel.Parent = ScreenGui
+
+local controlCorner = Instance.new("UICorner")
+controlCorner.CornerRadius = UDim.new(0, 6)
+controlCorner.Parent = ControlPanel
+
+-- Control Panel Title Bar
+local controlTitleBar = Instance.new("Frame")
+controlTitleBar.Name = "TitleBar"
+controlTitleBar.Size = UDim2.new(1, 0, 0, 20)
+controlTitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+controlTitleBar.BorderSizePixel = 0
+controlTitleBar.Parent = ControlPanel
+
+local controlTitleCorner = Instance.new("UICorner")
+controlTitleCorner.CornerRadius = UDim.new(0, 6)
+controlTitleCorner.Parent = controlTitleBar
+
+local controlTitle = Instance.new("TextLabel")
+controlTitle.Name = "ControlTitle"
+controlTitle.Size = UDim2.new(1, -20, 1, 0)
+controlTitle.BackgroundTransparency = 1
+controlTitle.Text = "CONTROLS"
+controlTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+controlTitle.TextSize = 10
+controlTitle.Font = Enum.Font.GothamBold
+controlTitle.Parent = controlTitleBar
+
+-- Collapse Button for Control Panel
+local controlCollapse = Instance.new("TextButton")
+controlCollapse.Size = UDim2.new(0, 16, 0, 16)
+controlCollapse.Position = UDim2.new(1, -18, 0, 2)
+controlCollapse.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+controlCollapse.BorderSizePixel = 0
+controlCollapse.Text = "-"
+controlCollapse.TextColor3 = Color3.fromRGB(255, 255, 255)
+controlCollapse.TextSize = 12
+controlCollapse.Font = Enum.Font.GothamBold
+controlCollapse.Parent = controlTitleBar
+
+local controlCollapseCorner = Instance.new("UICorner")
+controlCollapseCorner.CornerRadius = UDim.new(0, 3)
+controlCollapseCorner.Parent = controlCollapse
+
+-- Control Panel Content
+local controlContent = Instance.new("Frame")
+controlContent.Name = "Content"
+controlContent.Size = UDim2.new(1, -8, 1, -24)
+controlContent.Position = UDim2.new(0, 4, 0, 22)
+controlContent.BackgroundTransparency = 1
+controlContent.Parent = ControlPanel
+
+-- Unview Button
+local UnviewButton = Instance.new("TextButton")
+UnviewButton.Size = UDim2.new(1, 0, 0, 20)
+UnviewButton.Position = UDim2.new(0, 0, 0, 0)
+UnviewButton.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+UnviewButton.BorderSizePixel = 0
+UnviewButton.Text = "UNVIEW"
+UnviewButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+UnviewButton.TextSize = 9
+UnviewButton.Font = Enum.Font.GothamBold
+UnviewButton.Parent = controlContent
+
+local unviewCorner = Instance.new("UICorner")
+unviewCorner.CornerRadius = UDim.new(0, 4)
+unviewCorner.Parent = UnviewButton
+
+-- TP Loop Button
+local TPLoopButton = Instance.new("TextButton")
+TPLoopButton.Size = UDim2.new(0.6, -2, 0, 20)
+TPLoopButton.Position = UDim2.new(0, 0, 0, 24)
+TPLoopButton.BackgroundColor3 = Color3.fromRGB(80, 80, 150)
+TPLoopButton.BorderSizePixel = 0
+TPLoopButton.Text = "TP LOOP: OFF"
+TPLoopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TPLoopButton.TextSize = 8
+TPLoopButton.Font = Enum.Font.GothamBold
+TPLoopButton.Parent = controlContent
+
+local tpLoopCorner = Instance.new("UICorner")
+tpLoopCorner.CornerRadius = UDim.new(0, 4)
+tpLoopCorner.Parent = TPLoopButton
+
+-- Distance Label
+local DistanceLabel = Instance.new("TextLabel")
+DistanceLabel.Size = UDim2.new(0.4, 0, 0, 9)
+DistanceLabel.Position = UDim2.new(0.6, 2, 0, 24)
+DistanceLabel.BackgroundTransparency = 1
+DistanceLabel.Text = "Dist: " .. teleportDistance
+DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+DistanceLabel.TextSize = 7
+DistanceLabel.Font = Enum.Font.GothamBold
+DistanceLabel.Parent = controlContent
+
+-- Distance Decrease
+local DistanceDecrease = Instance.new("TextButton")
+DistanceDecrease.Size = UDim2.new(0.19, 0, 0, 9)
+DistanceDecrease.Position = UDim2.new(0.6, 2, 0, 35)
+DistanceDecrease.BackgroundColor3 = Color3.fromRGB(50, 30, 30)
+DistanceDecrease.BorderSizePixel = 0
+DistanceDecrease.Text = "-"
+DistanceDecrease.TextColor3 = Color3.fromRGB(255, 150, 150)
+DistanceDecrease.TextSize = 10
+DistanceDecrease.Font = Enum.Font.GothamBold
+DistanceDecrease.Parent = controlContent
+
+local decCorner = Instance.new("UICorner")
+decCorner.CornerRadius = UDim.new(0, 2)
+decCorner.Parent = DistanceDecrease
+
+-- Distance Increase
+local DistanceIncrease = Instance.new("TextButton")
+DistanceIncrease.Size = UDim2.new(0.19, 0, 0, 9)
+DistanceIncrease.Position = UDim2.new(0.81, 0, 0, 35)
+DistanceIncrease.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
+DistanceIncrease.BorderSizePixel = 0
+DistanceIncrease.Text = "+"
+DistanceIncrease.TextColor3 = Color3.fromRGB(150, 255, 150)
+DistanceIncrease.TextSize = 10
+DistanceIncrease.Font = Enum.Font.GothamBold
+DistanceIncrease.Parent = controlContent
+
+local incCorner = Instance.new("UICorner")
+incCorner.CornerRadius = UDim.new(0, 2)
+incCorner.Parent = DistanceIncrease
+
+-- Collapse functionality for Player List
+local listCollapsed = false
+listCollapse.MouseButton1Click:Connect(function()
+    listCollapsed = not listCollapsed
+    listContent.Visible = not listCollapsed
+    listCollapse.Text = listCollapsed and "+" or "-"
+    PlayerListFrame.Size = listCollapsed and UDim2.new(0, 180, 0, 22) or UDim2.new(0, 180, 0, 215)
+end)
+
+-- Collapse functionality for Control Panel
+local controlCollapsed = false
+controlCollapse.MouseButton1Click:Connect(function()
+    controlCollapsed = not controlCollapsed
+    controlContent.Visible = not controlCollapsed
+    controlCollapse.Text = controlCollapsed and "+" or "-"
+    ControlPanel.Size = controlCollapsed and UDim2.new(0, 180, 0, 22) or UDim2.new(0, 180, 0, 90)
+end)
+
+-- Helper Functions
+local function weldtp(part, cfr)
+    if not (part and part.Parent and part:IsA("BasePart") and (not part:IsGrounded())) then
+        return nil
+    end
+    
+    local ancprt = Instance.new("Part", Workspace)
+    ancprt.Anchored = true
+    ancprt.Transparency = 1
+    ancprt.CanCollide = false
+    ancprt.Name = "weldtp_anchor"
+    
+    local weld = Instance.new("Weld")
+    weld.Part0 = part
+    weld.C0 = cfr:Inverse()
+    weld.Part1 = ancprt
+    weld.C1 = ancprt.CFrame:Inverse()
+    weld.Parent = Workspace
+    
+    RunService.Stepped:Wait()
+    
+    pcall(function()
+        weld:Destroy()
+        ancprt:Destroy()
+    end)
+end
+
+local function unview()
+    viewedPlayer = nil
+    ControlPanel.Visible = false
+    teleportLoopEnabled = false
+    TPLoopButton.Text = "TP LOOP: OFF"
+    TPLoopButton.BackgroundColor3 = Color3.fromRGB(80, 80, 150)
+    controlTitle.Text = "CONTROLS"
+    
+    local c = player.Character
+    if c and c.Parent then
+        local subject = c:FindFirstChildOfClass("Humanoid") or c:FindFirstChildWhichIsA("BasePart")
+        if subject then
+            Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+            Workspace.CurrentCamera.CameraSubject = subject
+        end
+    end
+    
+    -- Update player button colors
+    for _, btn in pairs(PlayerScrollFrame:GetChildren()) do
+        if btn:IsA("TextButton") then
+            local plr = Players:FindFirstChild(btn.Name)
+            btn.BackgroundColor3 = (plr == player) and Color3.fromRGB(100, 150, 150) or Color3.fromRGB(50, 50, 55)
+        end
+    end
+end
+
+local function createPlayerButton(plr)
+    local button = Instance.new("TextButton")
+    button.Name = plr.Name
+    button.Size = UDim2.new(1, -4, 0, 22)
+    button.BackgroundColor3 = (plr == player) and Color3.fromRGB(100, 150, 150) or Color3.fromRGB(50, 50, 55)
+    button.BorderSizePixel = 0
+    button.Text = plr.Name
+    if plr.DisplayName ~= plr.Name then
+        button.Text = plr.Name .. " (" .. plr.DisplayName .. ")"
+    end
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 8
+    button.Font = Enum.Font.GothamBold
+    button.TextXAlignment = Enum.TextXAlignment.Left
+    button.TextTruncate = Enum.TextTruncate.AtEnd
+    button.Parent = PlayerScrollFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 4)
+    btnCorner.Parent = button
+    
+    local padding = Instance.new("UIPadding")
+    padding.PaddingLeft = UDim.new(0, 5)
+    padding.Parent = button
+    
+    button.MouseButton1Click:Connect(function()
+        if plr == player then return end
+        
+        if viewedPlayer == plr then
+            unview()
+        else
+            viewedPlayer = plr
+            ControlPanel.Visible = true
+            controlTitle.Text = "VIEWING: " .. plr.Name
+            
+            -- Update button colors
+            for _, btn in pairs(PlayerScrollFrame:GetChildren()) do
+                if btn:IsA("TextButton") then
+                    local btnPlr = Players:FindFirstChild(btn.Name)
+                    if btnPlr then
+                        btn.BackgroundColor3 = (btn.Name == plr.Name) and Color3.fromRGB(100, 100, 200) or ((btnPlr == player) and Color3.fromRGB(100, 150, 150) or Color3.fromRGB(50, 50, 55))
+                    end
+                end
+            end
+        end
+    end)
+    
+    return button
+end
+
+local function updatePlayerList()
+    -- Clear existing buttons and headers
+    for _, child in pairs(PlayerScrollFrame:GetChildren()) do
+        if child:IsA("TextButton") or child:IsA("TextLabel") then
+            child:Destroy()
+        end
+    end
+    
+    -- Add players based on team check
+    if teamCheckEnabled then
+        -- Collect all unique teams
+        local teams = {}
+        local teamDict = {}
+        
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr.Team and not teamDict[plr.Team] then
+                teamDict[plr.Team] = true
+                table.insert(teams, plr.Team)
+            end
+        end
+        
+        -- Sort teams by name
+        table.sort(teams, function(a, b)
+            return a.Name < b.Name
+        end)
+        
+        -- Display each team with its players
+        for _, team in ipairs(teams) do
+            -- Team header
+            local header = Instance.new("TextLabel")
+            header.Name = "TeamHeader_" .. team.Name
+            header.Size = UDim2.new(1, -4, 0, 18)
+            header.BackgroundColor3 = team.TeamColor.Color
+            header.BorderSizePixel = 0
+            header.TextColor3 = Color3.fromRGB(255, 255, 255)
+            header.TextSize = 9
+            header.Font = Enum.Font.GothamBold
+            header.TextXAlignment = Enum.TextXAlignment.Left
+            header.Parent = PlayerScrollFrame
+            
+            local headerCorner = Instance.new("UICorner")
+            headerCorner.CornerRadius = UDim.new(0, 3)
+            headerCorner.Parent = header
+            
+            local headerPadding = Instance.new("UIPadding")
+            headerPadding.PaddingLeft = UDim.new(0, 5)
+            headerPadding.Parent = header
+            
+            -- Collect players in this team
+            local teamPlayers = {}
+            for _, plr in pairs(Players:GetPlayers()) do
+                if plr.Team == team then
+                    table.insert(teamPlayers, plr)
+                end
+            end
+            
+            -- Update header with count
+            header.Text = team.Name .. " (" .. #teamPlayers .. ")"
+            
+            -- Sort players
+            table.sort(teamPlayers, function(a, b)
+                return a.Name < b.Name
+            end)
+            
+            -- Add player buttons
+            for _, plr in ipairs(teamPlayers) do
+                createPlayerButton(plr)
+            end
+        end
+        
+        -- Add no-team players
+        local noTeamPlayers = {}
+        for _, plr in pairs(Players:GetPlayers()) do
+            if not plr.Team then
+                table.insert(noTeamPlayers, plr)
+            end
+        end
+        
+        if #noTeamPlayers > 0 then
+            local header = Instance.new("TextLabel")
+            header.Name = "TeamHeader_NoTeam"
+            header.Size = UDim2.new(1, -4, 0, 18)
+            header.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+            header.BorderSizePixel = 0
+            header.Text = "No Team (" .. #noTeamPlayers .. ")"
+            header.TextColor3 = Color3.fromRGB(255, 255, 255)
+            header.TextSize = 9
+            header.Font = Enum.Font.GothamBold
+            header.TextXAlignment = Enum.TextXAlignment.Left
+            header.Parent = PlayerScrollFrame
+            
+            local headerCorner = Instance.new("UICorner")
+            headerCorner.CornerRadius = UDim.new(0, 3)
+            headerCorner.Parent = header
+            
+            local headerPadding = Instance.new("UIPadding")
+            headerPadding.PaddingLeft = UDim.new(0, 5)
+            headerPadding.Parent = header
+            
+            table.sort(noTeamPlayers, function(a, b)
+                return a.Name < b.Name
+            end)
+            
+            for _, plr in ipairs(noTeamPlayers) do
+                createPlayerButton(plr)
+            end
+        end
+    else
+        -- Show all players without team grouping
+        local allPlayers = Players:GetPlayers()
+        table.sort(allPlayers, function(a, b)
+            return a.Name < b.Name
+        end)
+        
+        for _, plr in ipairs(allPlayers) do
+            createPlayerButton(plr)
+        end
+    end
+end
+
+-- Team Check Toggle
+TeamCheckButton.MouseButton1Click:Connect(function()
+    teamCheckEnabled = not teamCheckEnabled
+    TeamCheckButton.Text = teamCheckEnabled and "TEAM CHECK: ON" or "TEAM CHECK: OFF"
+    TeamCheckButton.TextColor3 = teamCheckEnabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(150, 150, 150)
+    updatePlayerList()
+end)
+
+-- Populate initial player list
+updatePlayerList()
+
+-- Update list when players join/leave
+Players.PlayerAdded:Connect(function()
+    wait(0.1)
+    updatePlayerList()
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    if viewedPlayer == plr then
+        unview()
+    end
+    wait(0.1)
+    updatePlayerList()
+end)
+
+-- Button Events
+UnviewButton.MouseButton1Click:Connect(function()
+    unview()
+end)
+
+TPLoopButton.MouseButton1Click:Connect(function()
+    teleportLoopEnabled = not teleportLoopEnabled
+    TPLoopButton.Text = teleportLoopEnabled and "TP LOOP: ON" or "TP LOOP: OFF"
+    TPLoopButton.BackgroundColor3 = teleportLoopEnabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(80, 80, 150)
+end)
+
+DistanceDecrease.MouseButton1Click:Connect(function()
+    teleportDistance = math.max(1, teleportDistance - 1)
+    DistanceLabel.Text = "Dist: " .. teleportDistance
+end)
+
+DistanceIncrease.MouseButton1Click:Connect(function()
+    teleportDistance = math.min(50, teleportDistance + 1)
+    DistanceLabel.Text = "Dist: " .. teleportDistance
+end)
+
+-- Main Update Loop
+RunService.RenderStepped:Connect(function()
+    if viewedPlayer then
+        local c = viewedPlayer.Character
+        if c and c.Parent then
+            local subject = c:FindFirstChildOfClass("Humanoid") or c:FindFirstChildWhichIsA("BasePart")
+            if subject then
+                Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+                Workspace.CurrentCamera.CameraSubject = subject
+            end
+            
+            -- TP Loop
+            if teleportLoopEnabled then
+                local myChar = player.Character
+                if myChar and myChar.Parent then
+                    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+                    local targetHRP = c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("Head")
+                    
+                    if myHRP and targetHRP then
+                        local targetPos = targetHRP.Position
+                        local lookVector = (Workspace.CurrentCamera.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit
+                        local behindPos = targetPos - (lookVector * teleportDistance)
+                        behindPos = Vector3.new(behindPos.X, targetPos.Y, behindPos.Z)
+                        
+                        weldtp(myHRP, CFrame.new(behindPos, targetPos))
+                    end
+                end
+            end
+        else
+            -- Character not found, unview
+            unview()
+        end
+    end
+end)
+
+print("View Player Camera loaded!")
