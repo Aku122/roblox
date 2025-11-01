@@ -1,0 +1,719 @@
+
+local cam = workspace.CurrentCamera
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local onMobile = not UIS.KeyboardEnabled
+local keysDown = {}
+local rotating = false
+local freecamEnabled = false
+local originalCameraType = cam.CameraType
+local originalCFrame = cam.CFrame
+local savedCharacterPosition = nil
+local lastFreecamPosition = nil
+local connections = {}
+local espEnabled = false
+local teleportLoopEnabled = false
+local teleportDelay = 0.5
+local groundDetectionEnabled = false
+
+-- ESP Drawing objects
+local espObjects = {
+    box = nil,
+    nameTag = nil,
+    distanceTag = nil,
+    tracer = nil
+}
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local speed = 15
+local sens = .3
+speed /= 10
+if onMobile then sens *= 2 end
+
+-- Create GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FreecamGUI"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ResetOnSpawn = false
+
+-- Main Toggle Button (like original)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 120, 0, 40)
+ToggleButton.Position = UDim2.new(0, 10, 0, 60)
+ToggleButton.Text = "FREECAM: OFF"
+ToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ToggleButton.TextColor3 = Color3.fromRGB(255, 50, 50)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 12
+ToggleButton.BorderSizePixel = 1
+ToggleButton.BorderColor3 = Color3.fromRGB(100, 100, 100)
+ToggleButton.Active = true
+ToggleButton.Draggable = true
+ToggleButton.Parent = ScreenGui
+
+-- Controls Frame (draggable and collapsible)
+local ControlsFrame = Instance.new("Frame")
+ControlsFrame.Name = "ControlsFrame"
+ControlsFrame.Size = UDim2.new(0, 180, 0, 135)
+ControlsFrame.Position = UDim2.new(0, 10, 0, 110)
+ControlsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+ControlsFrame.BorderSizePixel = 1
+ControlsFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+ControlsFrame.Active = true
+ControlsFrame.Draggable = true
+ControlsFrame.Visible = true
+ControlsFrame.Parent = ScreenGui
+
+local controlsCorner = Instance.new("UICorner")
+controlsCorner.CornerRadius = UDim.new(0, 6)
+controlsCorner.Parent = ControlsFrame
+
+-- Controls Title Bar
+local controlsTitleBar = Instance.new("Frame")
+controlsTitleBar.Name = "TitleBar"
+controlsTitleBar.Size = UDim2.new(1, 0, 0, 20)
+controlsTitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+controlsTitleBar.BorderSizePixel = 0
+controlsTitleBar.Parent = ControlsFrame
+
+local controlsTitleCorner = Instance.new("UICorner")
+controlsTitleCorner.CornerRadius = UDim.new(0, 6)
+controlsTitleCorner.Parent = controlsTitleBar
+
+local controlsTitle = Instance.new("TextLabel")
+controlsTitle.Size = UDim2.new(1, -20, 1, 0)
+controlsTitle.BackgroundTransparency = 1
+controlsTitle.Text = "CONTROLS"
+controlsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+controlsTitle.TextSize = 10
+controlsTitle.Font = Enum.Font.GothamBold
+controlsTitle.Parent = controlsTitleBar
+
+local controlsCollapse = Instance.new("TextButton")
+controlsCollapse.Size = UDim2.new(0, 16, 0, 16)
+controlsCollapse.Position = UDim2.new(1, -18, 0, 2)
+controlsCollapse.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+controlsCollapse.BorderSizePixel = 0
+controlsCollapse.Text = "-"
+controlsCollapse.TextColor3 = Color3.fromRGB(255, 255, 255)
+controlsCollapse.TextSize = 12
+controlsCollapse.Font = Enum.Font.GothamBold
+controlsCollapse.Parent = controlsTitleBar
+
+local collapseCorner = Instance.new("UICorner")
+collapseCorner.CornerRadius = UDim.new(0, 3)
+collapseCorner.Parent = controlsCollapse
+
+-- Controls Content Frame
+local controlsContent = Instance.new("Frame")
+controlsContent.Name = "Content"
+controlsContent.Size = UDim2.new(1, -8, 1, -24)
+controlsContent.Position = UDim2.new(0, 4, 0, 22)
+controlsContent.BackgroundTransparency = 1
+controlsContent.Parent = ControlsFrame
+
+-- Ground Detection Toggle Button
+local GroundDetectButton = Instance.new("TextButton")
+GroundDetectButton.Name = "GroundDetectButton"
+GroundDetectButton.Size = UDim2.new(1, 0, 0, 24)
+GroundDetectButton.Position = UDim2.new(0, 0, 0, 56)
+GroundDetectButton.Text = "GROUND DETECT: OFF"
+GroundDetectButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+GroundDetectButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+GroundDetectButton.Font = Enum.Font.GothamBold
+GroundDetectButton.TextSize = 9
+GroundDetectButton.BorderSizePixel = 0
+GroundDetectButton.Parent = controlsContent
+
+local groundDetectCorner = Instance.new("UICorner")
+groundDetectCorner.CornerRadius = UDim.new(0, 4)
+groundDetectCorner.Parent = GroundDetectButton
+
+-- Back Home Button (inside controls frame)
+local BackButton = Instance.new("TextButton")
+BackButton.Name = "BackButton"
+BackButton.Size = UDim2.new(1, 0, 0, 24)
+BackButton.Position = UDim2.new(0, 0, 0, 84)
+BackButton.Text = "BACK HOME"
+BackButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+BackButton.TextColor3 = Color3.fromRGB(255, 150, 50)
+BackButton.Font = Enum.Font.GothamBold
+BackButton.TextSize = 9
+BackButton.BorderSizePixel = 0
+BackButton.Parent = controlsContent
+
+local backCorner = Instance.new("UICorner")
+backCorner.CornerRadius = UDim.new(0, 4)
+backCorner.Parent = BackButton
+
+-- ESP Button
+local EspButton = Instance.new("TextButton")
+EspButton.Size = UDim2.new(1, 0, 0, 24)
+EspButton.Position = UDim2.new(0, 0, 0, 0)
+EspButton.Text = "ESP ME: OFF"
+EspButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+EspButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+EspButton.Font = Enum.Font.GothamBold
+EspButton.TextSize = 9
+EspButton.BorderSizePixel = 0
+EspButton.Parent = controlsContent
+
+local espCorner = Instance.new("UICorner")
+espCorner.CornerRadius = UDim.new(0, 4)
+espCorner.Parent = EspButton
+
+-- Teleport Loop Button with delay display
+local TeleportLoopButton = Instance.new("TextButton")
+TeleportLoopButton.Size = UDim2.new(1, -60, 0, 24)
+TeleportLoopButton.Position = UDim2.new(0, 0, 0, 28)
+TeleportLoopButton.Text = "TP LOOP: OFF | " .. teleportDelay .. "s"
+TeleportLoopButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+TeleportLoopButton.TextColor3 = Color3.fromRGB(150, 100, 50)
+TeleportLoopButton.Font = Enum.Font.GothamBold
+TeleportLoopButton.TextSize = 8
+TeleportLoopButton.BorderSizePixel = 0
+TeleportLoopButton.Parent = controlsContent
+
+local tpLoopCorner = Instance.new("UICorner")
+tpLoopCorner.CornerRadius = UDim.new(0, 4)
+tpLoopCorner.Parent = TeleportLoopButton
+
+-- Delay Control Buttons
+local DelayDecreaseButton = Instance.new("TextButton")
+DelayDecreaseButton.Size = UDim2.new(0, 26, 0, 24)
+DelayDecreaseButton.Position = UDim2.new(1, -56, 0, 28)
+DelayDecreaseButton.Text = "-"
+DelayDecreaseButton.BackgroundColor3 = Color3.fromRGB(50, 30, 30)
+DelayDecreaseButton.TextColor3 = Color3.fromRGB(255, 150, 150)
+DelayDecreaseButton.Font = Enum.Font.GothamBold
+DelayDecreaseButton.TextSize = 14
+DelayDecreaseButton.BorderSizePixel = 0
+DelayDecreaseButton.Parent = controlsContent
+
+local decreaseCorner = Instance.new("UICorner")
+decreaseCorner.CornerRadius = UDim.new(0, 4)
+decreaseCorner.Parent = DelayDecreaseButton
+
+local DelayIncreaseButton = Instance.new("TextButton")
+DelayIncreaseButton.Size = UDim2.new(0, 26, 0, 24)
+DelayIncreaseButton.Position = UDim2.new(1, -28, 0, 28)
+DelayIncreaseButton.Text = "+"
+DelayIncreaseButton.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
+DelayIncreaseButton.TextColor3 = Color3.fromRGB(150, 255, 150)
+DelayIncreaseButton.Font = Enum.Font.GothamBold
+DelayIncreaseButton.TextSize = 14
+DelayIncreaseButton.BorderSizePixel = 0
+DelayIncreaseButton.Parent = controlsContent
+
+local increaseCorner = Instance.new("UICorner")
+increaseCorner.CornerRadius = UDim.new(0, 4)
+increaseCorner.Parent = DelayIncreaseButton
+
+-- Collapse functionality
+local controlsCollapsed = false
+controlsCollapse.MouseButton1Click:Connect(function()
+    controlsCollapsed = not controlsCollapsed
+    controlsContent.Visible = not controlsCollapsed
+    controlsCollapse.Text = controlsCollapsed and "+" or "-"
+    ControlsFrame.Size = controlsCollapsed and UDim2.new(0, 180, 0, 22) or UDim2.new(0, 180, 0, 135)
+end)
+
+-- Update ESP button visibility based on freecam state
+local function updateEspButtonVisibility()
+    EspButton.Visible = freecamEnabled
+end
+
+
+
+-- Create ESP Drawing objects
+local function createESP()
+    -- Player name tag
+    espObjects.nameTag = Drawing.new("Text")
+    espObjects.nameTag.Size = 16
+    espObjects.nameTag.Color = Color3.fromRGB(255, 255, 0)
+    espObjects.nameTag.Center = true
+    espObjects.nameTag.Outline = true
+    espObjects.nameTag.Font = Drawing.Fonts.UI
+    espObjects.nameTag.Visible = false
+
+    -- Bounding box
+    espObjects.box = Drawing.new("Square")
+    espObjects.box.Thickness = 2
+    espObjects.box.Color = Color3.fromRGB(255, 255, 0)
+    espObjects.box.Filled = false
+    espObjects.box.Visible = false
+
+    -- Distance tag
+    espObjects.distanceTag = Drawing.new("Text")
+    espObjects.distanceTag.Size = 14
+    espObjects.distanceTag.Color = Color3.fromRGB(255, 255, 100)
+    espObjects.distanceTag.Center = true
+    espObjects.distanceTag.Outline = true
+    espObjects.distanceTag.Font = Drawing.Fonts.UI
+    espObjects.distanceTag.Visible = false
+
+    -- Tracer line
+    espObjects.tracer = Drawing.new("Line")
+    espObjects.tracer.Thickness = 2
+    espObjects.tracer.Color = Color3.fromRGB(255, 255, 0)
+    espObjects.tracer.Visible = false
+end
+
+-- Remove ESP objects
+local function removeESP()
+    for _, obj in pairs(espObjects) do
+        if obj then
+            obj.Visible = false
+            obj:Remove()
+        end
+    end
+    espObjects = {
+        box = nil,
+        nameTag = nil,
+        distanceTag = nil,
+        tracer = nil
+    }
+end
+
+-- Update ESP
+local function updateESP()
+    if not espEnabled or not freecamEnabled then
+        for _, obj in pairs(espObjects) do
+            if obj then
+                obj.Visible = false
+            end
+        end
+        return
+    end
+
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") or not character:FindFirstChild("Head") then
+        return
+    end
+
+    local humanoidRootPart = character.HumanoidRootPart
+    local head = character.Head
+
+    -- Calculate distance
+    local distance = math.floor((cam.CFrame.Position - humanoidRootPart.Position).Magnitude)
+
+    -- Get screen positions
+    local headPos2D, onScreen1 = cam:WorldToViewportPoint(head.Position)
+    local rootPos2D, onScreen2 = cam:WorldToViewportPoint(humanoidRootPart.Position)
+
+    if onScreen1 and onScreen2 then
+        local height = math.abs(headPos2D.Y - rootPos2D.Y) * 1.2
+        local width = height / 2
+
+        -- Update bounding box
+        espObjects.box.Size = Vector2.new(width, height)
+        espObjects.box.Position = Vector2.new(rootPos2D.X - width/2, rootPos2D.Y - height/2)
+        espObjects.box.Visible = true
+
+        -- Update name tag
+        espObjects.nameTag.Text = player.Name .. " [ME]"
+        espObjects.nameTag.Position = Vector2.new(headPos2D.X, headPos2D.Y - 30)
+        espObjects.nameTag.Visible = true
+
+        -- Update distance tag
+        espObjects.distanceTag.Text = distance .. "m"
+        espObjects.distanceTag.Position = Vector2.new(rootPos2D.X, rootPos2D.Y + height/2 + 15)
+        espObjects.distanceTag.Visible = true
+
+        -- Update tracer from center of screen to player
+        espObjects.tracer.From = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+        espObjects.tracer.To = Vector2.new(rootPos2D.X, rootPos2D.Y)
+        espObjects.tracer.Visible = true
+    else
+        for _, obj in pairs(espObjects) do
+            if obj then
+                obj.Visible = false
+            end
+        end
+    end
+end
+
+-- Find safe ground position near target
+local function findSafePosition(targetPosition)
+    local character = player.Character
+    if not character then return targetPosition end
+    
+    -- Try multiple raycast positions around the target
+    local testPositions = {
+        targetPosition,
+        targetPosition + Vector3.new(5, 0, 0),
+        targetPosition + Vector3.new(-5, 0, 0),
+        targetPosition + Vector3.new(0, 0, 5),
+        targetPosition + Vector3.new(0, 0, -5),
+        targetPosition + Vector3.new(3, 0, 3),
+        targetPosition + Vector3.new(-3, 0, -3),
+    }
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    
+    for _, testPos in pairs(testPositions) do
+        local startPos = testPos + Vector3.new(0, 50, 0)
+        local raycastResult = workspace:Raycast(startPos, Vector3.new(0, -100, 0), raycastParams)
+        
+        if raycastResult then
+            return raycastResult.Position + Vector3.new(0, 5, 0)
+        end
+    end
+    
+    -- If no ground found, return position slightly above target
+    return targetPosition + Vector3.new(0, 10, 0)
+end
+
+-- Teleport player to target position
+local function teleportToPosition(targetPosition)
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local humanoidRootPart = character.HumanoidRootPart
+    local finalPosition = targetPosition
+    
+    if groundDetectionEnabled then
+        finalPosition = findSafePosition(targetPosition)
+    end
+    
+    humanoidRootPart.CFrame = CFrame.new(finalPosition)
+end
+
+-- Update delay display
+local function updateDelayDisplay()
+    local status = teleportLoopEnabled and "ON" or "OFF"
+    TeleportLoopButton.Text = "TP LOOP: " .. status .. " | " .. teleportDelay .. "s"
+end
+
+-- Freeze character function
+local function freezeCharacter(freeze)
+    local character = player.Character
+    if not character then return end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    
+    if freeze then
+        if humanoidRootPart then
+            savedCharacterPosition = humanoidRootPart.CFrame
+            -- Anchor character
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Anchored = true
+                end
+            end
+        end
+        if humanoid then
+            humanoid.PlatformStand = true
+        end
+    else
+        -- Unfreeze character
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Anchored = false
+            end
+        end
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+    end
+end
+
+local function enableFreecam()
+    freecamEnabled = true
+    originalCFrame = cam.CFrame
+    cam.CameraType = Enum.CameraType.Scriptable
+    freezeCharacter(true)
+    ToggleButton.Text = "FREECAM: ON"
+    ToggleButton.TextColor3 = Color3.fromRGB(50, 255, 50)
+    
+    -- Update ESP button visibility
+    updateEspButtonVisibility()
+    
+    -- Create ESP objects
+    createESP()
+    
+    -- Connect movement
+    connections.renderStepped = RS.RenderStepped:Connect(function()
+        if rotating then
+            local delta = UIS:GetMouseDelta()
+            local cf = cam.CFrame
+            local yAngle = cf:ToEulerAngles(Enum.RotationOrder.YZX)
+            local newAmount = math.deg(yAngle) + delta.Y
+            if newAmount > 65 or newAmount < -65 then
+                if not (yAngle < 0 and delta.Y < 0) and not (yAngle > 0 and delta.Y > 0) then
+                    delta = Vector2.new(delta.X, 0)
+                end 
+            end
+            cf *= CFrame.Angles(-math.rad(delta.Y), 0, 0)
+            cf = CFrame.Angles(0, -math.rad(delta.X), 0) * (cf - cf.Position) + cf.Position
+            cf = CFrame.lookAt(cf.Position, cf.Position + cf.LookVector)
+            if delta ~= Vector2.new(0, 0) then 
+                cam.CFrame = cam.CFrame:Lerp(cf, sens) 
+            end
+            UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition
+        else
+            UIS.MouseBehavior = Enum.MouseBehavior.Default
+        end
+
+        if keysDown["Enum.KeyCode.W"] then
+            cam.CFrame *= CFrame.new(Vector3.new(0, 0, -speed))
+        end
+        if keysDown["Enum.KeyCode.A"] then
+            cam.CFrame *= CFrame.new(Vector3.new(-speed, 0, 0))
+        end
+        if keysDown["Enum.KeyCode.S"] then
+            cam.CFrame *= CFrame.new(Vector3.new(0, 0, speed))
+        end
+        if keysDown["Enum.KeyCode.D"] then
+            cam.CFrame *= CFrame.new(Vector3.new(speed, 0, 0))
+        end
+        if keysDown["Enum.KeyCode.Q"] then
+            cam.CFrame *= CFrame.new(Vector3.new(0, -speed, 0))
+        end
+        if keysDown["Enum.KeyCode.E"] then
+            cam.CFrame *= CFrame.new(Vector3.new(0, speed, 0))
+        end
+        
+        -- Update ESP
+        updateESP()
+    end)
+end
+
+local function disableFreecam()
+    freecamEnabled = false
+    
+    -- Save current camera position for TP loop
+    lastFreecamPosition = cam.CFrame.Position
+    
+    cam.CameraType = originalCameraType
+    freezeCharacter(false)
+    ToggleButton.Text = "FREECAM: OFF"
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 50, 50)
+    
+    -- Update ESP button visibility and disable ESP
+    espEnabled = false
+    EspButton.Text = "ESP ME: OFF"
+    EspButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+    updateEspButtonVisibility()
+    
+    -- Remove ESP
+    removeESP()
+    
+    -- Disconnect movement
+    if connections.renderStepped then
+        connections.renderStepped:Disconnect()
+        connections.renderStepped = nil
+    end
+    
+    -- Start TP loop if enabled
+    if teleportLoopEnabled and lastFreecamPosition then
+        connections.teleportLoop = RS.Heartbeat:Connect(function()
+            if teleportLoopEnabled and lastFreecamPosition then
+                wait(teleportDelay)
+                teleportToPosition(lastFreecamPosition)
+            end
+        end)
+    end
+    
+    UIS.MouseBehavior = Enum.MouseBehavior.Default
+    keysDown = {}
+    rotating = false
+end
+
+-- Toggle Ground Detection
+GroundDetectButton.MouseButton1Click:Connect(function()
+    groundDetectionEnabled = not groundDetectionEnabled
+    if groundDetectionEnabled then
+        GroundDetectButton.Text = "GROUND DETECT: ON"
+        GroundDetectButton.TextColor3 = Color3.fromRGB(50, 255, 50)
+    else
+        GroundDetectButton.Text = "GROUND DETECT: OFF"
+        GroundDetectButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+    end
+end)
+
+-- Toggle ESP
+EspButton.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    if espEnabled then
+        EspButton.Text = "ESP ME: ON"
+        EspButton.TextColor3 = Color3.fromRGB(50, 255, 50)
+        if not freecamEnabled then
+            createESP()
+        end
+    else
+        EspButton.Text = "ESP ME: OFF"
+        EspButton.TextColor3 = Color3.fromRGB(100, 100, 100)
+        if espObjects.box then
+            for _, obj in pairs(espObjects) do
+                if obj then
+                    obj.Visible = false
+                end
+            end
+        end
+    end
+end)
+
+-- Toggle teleport loop
+TeleportLoopButton.MouseButton1Click:Connect(function()
+    teleportLoopEnabled = not teleportLoopEnabled
+    if teleportLoopEnabled then
+        TeleportLoopButton.TextColor3 = Color3.fromRGB(50, 255, 50)
+        
+        -- If not in freecam and we have a saved position, start teleporting
+        if not freecamEnabled and lastFreecamPosition then
+            connections.teleportLoop = RS.Heartbeat:Connect(function()
+                if teleportLoopEnabled and lastFreecamPosition then
+                    wait(teleportDelay)
+                    teleportToPosition(lastFreecamPosition)
+                end
+            end)
+        end
+    else
+        TeleportLoopButton.TextColor3 = Color3.fromRGB(150, 100, 50)
+        
+        -- Stop teleport loop
+        if connections.teleportLoop then
+            connections.teleportLoop:Disconnect()
+            connections.teleportLoop = nil
+        end
+    end
+    updateDelayDisplay()
+end)
+
+-- Delay control buttons
+DelayDecreaseButton.MouseButton1Click:Connect(function()
+    teleportDelay = math.max(0.1, teleportDelay - 0.1)
+    teleportDelay = math.floor(teleportDelay * 10) / 10 -- Round to 1 decimal
+    updateDelayDisplay()
+end)
+
+DelayIncreaseButton.MouseButton1Click:Connect(function()
+    teleportDelay = math.min(5.0, teleportDelay + 0.1)
+    teleportDelay = math.floor(teleportDelay * 10) / 10 -- Round to 1 decimal
+    updateDelayDisplay()
+end)
+
+-- Back to original spawn position
+BackButton.MouseButton1Click:Connect(function()
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") and savedCharacterPosition then
+        -- Stop teleport loop temporarily
+        if connections.teleportLoop then
+            connections.teleportLoop:Disconnect()
+            connections.teleportLoop = nil
+        end
+        
+        character.HumanoidRootPart.CFrame = savedCharacterPosition
+        
+        -- Restart teleport loop if it was enabled
+        if teleportLoopEnabled and not freecamEnabled and lastFreecamPosition then
+            wait(0.1) -- Small delay before restarting
+            connections.teleportLoop = RS.Heartbeat:Connect(function()
+                if teleportLoopEnabled and lastFreecamPosition then
+                    wait(teleportDelay)
+                    teleportToPosition(lastFreecamPosition)
+                end
+            end)
+        end
+    end
+end)
+
+-- Toggle function
+ToggleButton.MouseButton1Click:Connect(function()
+    if freecamEnabled then
+        disableFreecam()
+    else
+        enableFreecam()
+    end
+end)
+
+local validKeys = {"Enum.KeyCode.W", "Enum.KeyCode.A", "Enum.KeyCode.S", "Enum.KeyCode.D", "Enum.KeyCode.Q", "Enum.KeyCode.E"}
+
+UIS.InputBegan:Connect(function(Input)
+    if not freecamEnabled then return end
+    
+    for i, key in pairs(validKeys) do
+        if key == tostring(Input.KeyCode) then
+            keysDown[key] = true
+        end
+    end
+    if Input.UserInputType == Enum.UserInputType.MouseButton2 or (Input.UserInputType == Enum.UserInputType.Touch and UIS:GetMouseLocation().X > (cam.ViewportSize.X/2)) then
+        rotating = true
+    end
+    if Input.UserInputType == Enum.UserInputType.Touch then
+        if Input.Position.X < cam.ViewportSize.X/2 then
+            touchPos = Input.Position
+        end
+    end
+end)
+
+UIS.InputEnded:Connect(function(Input)
+    if not freecamEnabled then return end
+    
+    for key, v in pairs(keysDown) do
+        if key == tostring(Input.KeyCode) then
+            keysDown[key] = false
+        end
+    end
+    if Input.UserInputType == Enum.UserInputType.MouseButton2 or (Input.UserInputType == Enum.UserInputType.Touch and UIS:GetMouseLocation().X > (cam.ViewportSize.X/2)) then
+        rotating = false
+    end
+    if Input.UserInputType == Enum.UserInputType.Touch and touchPos then
+        if Input.Position.X < cam.ViewportSize.X/2 then
+            touchPos = nil
+            keysDown["Enum.KeyCode.W"] = false
+            keysDown["Enum.KeyCode.A"] = false
+            keysDown["Enum.KeyCode.S"] = false
+            keysDown["Enum.KeyCode.D"] = false
+        end
+    end
+end)
+
+UIS.TouchMoved:Connect(function(input)
+    if not freecamEnabled then return end
+    if touchPos then
+        if input.Position.X < cam.ViewportSize.X/2 then
+            if input.Position.Y < touchPos.Y then
+                keysDown["Enum.KeyCode.W"] = true
+                keysDown["Enum.KeyCode.S"] = false
+            else
+                keysDown["Enum.KeyCode.W"] = false
+                keysDown["Enum.KeyCode.S"] = true
+            end
+            if input.Position.X < (touchPos.X - 15) then
+                keysDown["Enum.KeyCode.A"] = true
+                keysDown["Enum.KeyCode.D"] = false
+            elseif input.Position.X > (touchPos.X + 15) then
+                keysDown["Enum.KeyCode.A"] = false
+                keysDown["Enum.KeyCode.D"] = true
+            else
+                keysDown["Enum.KeyCode.A"] = false
+                keysDown["Enum.KeyCode.D"] = false
+            end
+        end
+    end
+end)
+
+-- Initialize delay display
+updateDelayDisplay()
+
+-- Cleanup on player leaving
+game:GetService("Players").PlayerRemoving:Connect(function(p)
+    if p == player then
+        if freecamEnabled then
+            disableFreecam()
+        end
+        if connections.teleportLoop then
+            connections.teleportLoop:Disconnect()
+        end
+        removeESP()
+        ScreenGui:Destroy()
+    end
+end)
