@@ -1,0 +1,252 @@
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Configuration
+local autoUseEnabled = false
+local useInterval = 0.01 -- Delay between tool uses (faster default)
+
+-- Create GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoToolsGUI"
+ScreenGui.Parent = playerGui
+ScreenGui.ResetOnSpawn = false
+
+-- Main Frame (draggable and collapsible)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 180, 0, 118)
+MainFrame.Position = UDim2.new(0, 400, 0, 10)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BorderSizePixel = 1
+MainFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 6)
+mainCorner.Parent = MainFrame
+
+-- Title Bar
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 20)
+TitleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 6)
+titleCorner.Parent = TitleBar
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 1, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "AUTO TOOLS"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 10
+Title.Font = Enum.Font.GothamBold
+Title.Parent = TitleBar
+
+-- Collapse Button
+local CollapseButton = Instance.new("TextButton")
+CollapseButton.Size = UDim2.new(0, 16, 0, 16)
+CollapseButton.Position = UDim2.new(1, -18, 0, 2)
+CollapseButton.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+CollapseButton.BorderSizePixel = 0
+CollapseButton.Text = "-"
+CollapseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CollapseButton.TextSize = 12
+CollapseButton.Font = Enum.Font.GothamBold
+CollapseButton.Parent = TitleBar
+
+local collapseCorner = Instance.new("UICorner")
+collapseCorner.CornerRadius = UDim.new(0, 3)
+collapseCorner.Parent = CollapseButton
+
+-- Content Frame
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "Content"
+ContentFrame.Size = UDim2.new(1, -8, 1, -24)
+ContentFrame.Position = UDim2.new(0, 4, 0, 22)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+-- Use Once Button
+local UseOnceButton = Instance.new("TextButton")
+UseOnceButton.Size = UDim2.new(1, 0, 0, 24)
+UseOnceButton.Position = UDim2.new(0, 0, 0, 0)
+UseOnceButton.BackgroundColor3 = Color3.fromRGB(80, 150, 80)
+UseOnceButton.BorderSizePixel = 0
+UseOnceButton.Text = "USE TOOLS ONCE"
+UseOnceButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+UseOnceButton.TextSize = 9
+UseOnceButton.Font = Enum.Font.GothamBold
+UseOnceButton.Parent = ContentFrame
+
+local useOnceCorner = Instance.new("UICorner")
+useOnceCorner.CornerRadius = UDim.new(0, 4)
+useOnceCorner.Parent = UseOnceButton
+
+-- Auto Use Toggle Button
+local AutoUseButton = Instance.new("TextButton")
+AutoUseButton.Size = UDim2.new(1, 0, 0, 24)
+AutoUseButton.Position = UDim2.new(0, 0, 0, 28)
+AutoUseButton.BackgroundColor3 = Color3.fromRGB(80, 80, 150)
+AutoUseButton.BorderSizePixel = 0
+AutoUseButton.Text = "AUTO USE: OFF"
+AutoUseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoUseButton.TextSize = 9
+AutoUseButton.Font = Enum.Font.GothamBold
+AutoUseButton.Parent = ContentFrame
+
+local autoUseCorner = Instance.new("UICorner")
+autoUseCorner.CornerRadius = UDim.new(0, 4)
+autoUseCorner.Parent = AutoUseButton
+
+-- Speed Label
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(0.6, -2, 0, 20)
+SpeedLabel.Position = UDim2.new(0, 0, 0, 54)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Text = "Speed: " .. string.format("%.2f", useInterval) .. "s"
+SpeedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SpeedLabel.TextSize = 8
+SpeedLabel.Font = Enum.Font.GothamBold
+SpeedLabel.Parent = ContentFrame
+
+-- Speed Decrease Button
+local SpeedDecreaseButton = Instance.new("TextButton")
+SpeedDecreaseButton.Size = UDim2.new(0.19, 0, 0, 20)
+SpeedDecreaseButton.Position = UDim2.new(0.6, 2, 0, 54)
+SpeedDecreaseButton.BackgroundColor3 = Color3.fromRGB(50, 30, 30)
+SpeedDecreaseButton.BorderSizePixel = 0
+SpeedDecreaseButton.Text = "-"
+SpeedDecreaseButton.TextColor3 = Color3.fromRGB(255, 150, 150)
+SpeedDecreaseButton.TextSize = 14
+SpeedDecreaseButton.Font = Enum.Font.GothamBold
+SpeedDecreaseButton.Parent = ContentFrame
+
+local speedDecCorner = Instance.new("UICorner")
+speedDecCorner.CornerRadius = UDim.new(0, 4)
+speedDecCorner.Parent = SpeedDecreaseButton
+
+-- Speed Increase Button
+local SpeedIncreaseButton = Instance.new("TextButton")
+SpeedIncreaseButton.Size = UDim2.new(0.19, 0, 0, 20)
+SpeedIncreaseButton.Position = UDim2.new(0.81, 0, 0, 54)
+SpeedIncreaseButton.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
+SpeedIncreaseButton.BorderSizePixel = 0
+SpeedIncreaseButton.Text = "+"
+SpeedIncreaseButton.TextColor3 = Color3.fromRGB(150, 255, 150)
+SpeedIncreaseButton.TextSize = 14
+SpeedIncreaseButton.Font = Enum.Font.GothamBold
+SpeedIncreaseButton.Parent = ContentFrame
+
+local speedIncCorner = Instance.new("UICorner")
+speedIncCorner.CornerRadius = UDim.new(0, 4)
+speedIncCorner.Parent = SpeedIncreaseButton
+
+-- Status Label
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 12)
+StatusLabel.Position = UDim2.new(0, 0, 0, 78)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "Ready"
+StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+StatusLabel.TextSize = 7
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.Parent = ContentFrame
+
+-- Update speed label
+local function updateSpeedLabel()
+    SpeedLabel.Text = "Speed: " .. string.format("%.2f", useInterval) .. "s"
+end
+
+-- Speed control buttons
+SpeedDecreaseButton.MouseButton1Click:Connect(function()
+    useInterval = math.max(0.01, useInterval - 0.1)
+    useInterval = math.floor(useInterval * 100) / 100 -- Round to 2 decimals
+    updateSpeedLabel()
+end)
+
+SpeedIncreaseButton.MouseButton1Click:Connect(function()
+    useInterval = math.min(2.0, useInterval + 0.1)
+    useInterval = math.floor(useInterval * 100) / 100 -- Round to 2 decimals
+    updateSpeedLabel()
+end)
+
+-- Collapse functionality
+local collapsed = false
+CollapseButton.MouseButton1Click:Connect(function()
+    collapsed = not collapsed
+    ContentFrame.Visible = not collapsed
+    CollapseButton.Text = collapsed and "+" or "-"
+    MainFrame.Size = collapsed and UDim2.new(0, 180, 0, 22) or UDim2.new(0, 180, 0, 118)
+end)
+
+-- Function to use all tools once
+local function useAllTools()
+    local backpack = player.Backpack
+    local character = player.Character
+    
+    if not character then
+        StatusLabel.Text = "No character found"
+        return
+    end
+    
+    local toolsUsed = 0
+    
+    for _, tool in pairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool.Parent = character
+            tool:Activate()
+            task.wait(useInterval)
+            tool.Parent = backpack
+            toolsUsed = toolsUsed + 1
+        end
+    end
+    
+    -- Also check tools already equipped
+    for _, tool in pairs(character:GetChildren()) do
+        if tool:IsA("Tool") and tool.Parent == character then
+            tool:Activate()
+            task.wait(useInterval)
+            toolsUsed = toolsUsed + 1
+        end
+    end
+    
+    StatusLabel.Text = "Used " .. toolsUsed .. " tools"
+end
+
+-- Use Once Button Click
+UseOnceButton.MouseButton1Click:Connect(function()
+    useAllTools()
+end)
+
+-- Auto Use Toggle
+AutoUseButton.MouseButton1Click:Connect(function()
+    autoUseEnabled = not autoUseEnabled
+    AutoUseButton.Text = autoUseEnabled and "AUTO USE: ON" or "AUTO USE: OFF"
+    AutoUseButton.BackgroundColor3 = autoUseEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(80, 80, 150)
+    
+    if autoUseEnabled then
+        StatusLabel.Text = "Auto-using tools..."
+    else
+        StatusLabel.Text = "Auto-use stopped"
+    end
+end)
+
+-- Auto Use Loop
+task.spawn(function()
+    while true do
+        task.wait(useInterval)
+        if autoUseEnabled then
+            useAllTools()
+        end
+    end
+end)
+
+print("Auto Tools GUI loaded!")
