@@ -1,0 +1,932 @@
+
+-- Universal Silent Aim - Mobile Optimized GUI
+-- Giữ nguyên toàn bộ chức năng, chỉ thay đổi GUI
+
+-- init
+if not game:IsLoaded() then 
+    game.Loaded:Wait()
+end
+
+if not syn or not protectgui then
+    getgenv().protectgui = function() end
+end
+
+local SilentAimSettings = {
+    Enabled = false,
+    
+    ClassName = "Universal Silent Aim - Averiias, Stefanuk12, xaxa",
+    ToggleKey = "RightAlt",
+    
+    TeamCheck = false,
+    VisibleCheck = false, 
+    TargetPart = "HumanoidRootPart",
+    SilentAimMethod = "Raycast",
+    
+    FOVRadius = 130,
+    FOVVisible = false,
+    ShowSilentAimTarget = false, 
+    
+    MouseHitPrediction = false,
+    MouseHitPredictionAmount = 0.165,
+    HitChance = 100
+}
+
+-- variables
+getgenv().SilentAimSettings = SilentAimSettings
+local MainFileName = "UniversalSilentAim"
+local SelectedFile, FileToSave = "", ""
+
+local Camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+local GetChildren = game.GetChildren
+local GetPlayers = Players.GetPlayers
+local WorldToScreen = Camera.WorldToScreenPoint
+local WorldToViewportPoint = Camera.WorldToViewportPoint
+local GetPartsObscuringTarget = Camera.GetPartsObscuringTarget
+local FindFirstChild = game.FindFirstChild
+local RenderStepped = RunService.RenderStepped
+local GuiInset = GuiService.GetGuiInset
+local GetMouseLocation = UserInputService.GetMouseLocation
+
+local resume = coroutine.resume 
+local create = coroutine.create
+
+local ValidTargetParts = {"Head", "HumanoidRootPart"}
+local PredictionAmount = 0.165
+
+local mouse_box = Drawing.new("Square")
+mouse_box.Visible = true 
+mouse_box.ZIndex = 999 
+mouse_box.Color = Color3.fromRGB(54, 57, 241)
+mouse_box.Thickness = 20 
+mouse_box.Size = Vector2.new(20, 20)
+mouse_box.Filled = true 
+
+local fov_circle = Drawing.new("Circle")
+fov_circle.Thickness = 2
+fov_circle.NumSides = 100
+fov_circle.Radius = 180
+fov_circle.Filled = false
+fov_circle.Visible = false
+fov_circle.ZIndex = 999
+fov_circle.Transparency = 1
+fov_circle.Color = Color3.fromRGB(54, 57, 241)
+
+local ExpectedArguments = {
+    FindPartOnRayWithIgnoreList = {
+        ArgCountRequired = 3,
+        Args = {
+            "Instance", "Ray", "table", "boolean", "boolean"
+        }
+    },
+    FindPartOnRayWithWhitelist = {
+        ArgCountRequired = 3,
+        Args = {
+            "Instance", "Ray", "table", "boolean"
+        }
+    },
+    FindPartOnRay = {
+        ArgCountRequired = 2,
+        Args = {
+            "Instance", "Ray", "Instance", "boolean", "boolean"
+        }
+    },
+    Raycast = {
+        ArgCountRequired = 3,
+        Args = {
+            "Instance", "Vector3", "Vector3", "RaycastParams"
+        }
+    }
+}
+
+function CalculateChance(Percentage)
+    Percentage = math.floor(Percentage)
+    local chance = math.floor(Random.new().NextNumber(Random.new(), 0, 1) * 100) / 100
+    return chance <= Percentage / 100
+end
+
+--[[file handling]] do 
+    if not isfolder(MainFileName) then 
+        makefolder(MainFileName);
+    end
+    
+    if not isfolder(string.format("%s/%s", MainFileName, tostring(game.PlaceId))) then 
+        makefolder(string.format("%s/%s", MainFileName, tostring(game.PlaceId)))
+    end
+end
+
+local Files = listfiles(string.format("%s/%s", "UniversalSilentAim", tostring(game.PlaceId)))
+
+-- functions
+local function GetFiles()
+    local out = {}
+    for i = 1, #Files do
+        local file = Files[i]
+        if file:sub(-4) == '.lua' then
+            local pos = file:find('.lua', 1, true)
+            local start = pos
+
+            local char = file:sub(pos, pos)
+            while char ~= '/' and char ~= '\\' and char ~= '' do
+                pos = pos - 1
+                char = file:sub(pos, pos)
+            end
+
+            if char == '/' or char == '\\' then
+                table.insert(out, file:sub(pos + 1, start - 1))
+            end
+        end
+    end
+    
+    return out
+end
+
+local function UpdateFile(FileName)
+    assert(FileName or FileName == "string", "oopsies");
+    writefile(string.format("%s/%s/%s.lua", MainFileName, tostring(game.PlaceId), FileName), HttpService:JSONEncode(SilentAimSettings))
+end
+
+local function LoadFile(FileName)
+    assert(FileName or FileName == "string", "oopsies");
+    
+    local File = string.format("%s/%s/%s.lua", MainFileName, tostring(game.PlaceId), FileName)
+    local ConfigData = HttpService:JSONDecode(readfile(File))
+    for Index, Value in next, ConfigData do
+        SilentAimSettings[Index] = Value
+    end
+end
+
+local function getPositionOnScreen(Vector)
+    local Vec3, OnScreen = WorldToScreen(Camera, Vector)
+    return Vector2.new(Vec3.X, Vec3.Y), OnScreen
+end
+
+local function ValidateArguments(Args, RayMethod)
+    local Matches = 0
+    if #Args < RayMethod.ArgCountRequired then
+        return false
+    end
+    for Pos, Argument in next, Args do
+        if typeof(Argument) == RayMethod.Args[Pos] then
+            Matches = Matches + 1
+        end
+    end
+    return Matches >= RayMethod.ArgCountRequired
+end
+
+local function getDirection(Origin, Position)
+    return (Position - Origin).Unit * 1000
+end
+
+local function getMousePosition()
+    return GetMouseLocation(UserInputService)
+end
+
+local function IsPlayerVisible(Player)
+    local PlayerCharacter = Player.Character
+    local LocalPlayerCharacter = LocalPlayer.Character
+    
+    if not (PlayerCharacter or LocalPlayerCharacter) then return end 
+    
+    local PlayerRoot = FindFirstChild(PlayerCharacter, SilentAimSettings.TargetPart) or FindFirstChild(PlayerCharacter, "HumanoidRootPart")
+    
+    if not PlayerRoot then return end 
+    
+    local CastPoints, IgnoreList = {PlayerRoot.Position, LocalPlayerCharacter, PlayerCharacter}, {LocalPlayerCharacter, PlayerCharacter}
+    local ObscuringObjects = #GetPartsObscuringTarget(Camera, CastPoints, IgnoreList)
+    
+    return ((ObscuringObjects == 0 and true) or (ObscuringObjects > 0 and false))
+end
+
+local function getClosestPlayer()
+    if not SilentAimSettings.TargetPart then return end
+    local Closest
+    local DistanceToMouse
+    for _, Player in next, GetPlayers(Players) do
+        if Player == LocalPlayer then continue end
+        if SilentAimSettings.TeamCheck and Player.Team == LocalPlayer.Team then continue end
+
+        local Character = Player.Character
+        if not Character then continue end
+        
+        if SilentAimSettings.VisibleCheck and not IsPlayerVisible(Player) then continue end
+
+        local HumanoidRootPart = FindFirstChild(Character, "HumanoidRootPart")
+        local Humanoid = FindFirstChild(Character, "Humanoid")
+        if not HumanoidRootPart or not Humanoid or Humanoid and Humanoid.Health <= 0 then continue end
+
+        local ScreenPosition, OnScreen = getPositionOnScreen(HumanoidRootPart.Position)
+        if not OnScreen then continue end
+
+        local Distance = (getMousePosition() - ScreenPosition).Magnitude
+        if Distance <= (DistanceToMouse or SilentAimSettings.FOVRadius or 2000) then
+            Closest = ((SilentAimSettings.TargetPart == "Random" and Character[ValidTargetParts[math.random(1, #ValidTargetParts)]]) or Character[SilentAimSettings.TargetPart])
+            DistanceToMouse = Distance
+        end
+    end
+    return Closest
+end
+
+--[[
+    ═══════════════════════════════════════════════════════════
+                    MOBILE-OPTIMIZED GUI
+    ═══════════════════════════════════════════════════════════
+]]
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SilentAimMobileGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() protectgui(ScreenGui) end)
+ScreenGui.Parent = game:GetService("CoreGui")
+
+-- Main Frame (Compact, Collapsible)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 480)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -240)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = false
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+-- Title Bar
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.BackgroundColor3 = Color3.fromRGB(54, 57, 241)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = TitleBar
+
+local TitleFix = Instance.new("Frame")
+TitleFix.Size = UDim2.new(1, 0, 0, 10)
+TitleFix.Position = UDim2.new(0, 0, 1, -10)
+TitleFix.BackgroundColor3 = Color3.fromRGB(54, 57, 241)
+TitleFix.BorderSizePixel = 0
+TitleFix.Parent = TitleBar
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -80, 1, 0)
+TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Silent Aim"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 16
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 35, 0, 35)
+CloseButton.Position = UDim2.new(1, -38, 0, 2.5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseButton
+
+CloseButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+end)
+
+-- Content ScrollingFrame
+local ContentFrame = Instance.new("ScrollingFrame")
+ContentFrame.Name = "ContentFrame"
+ContentFrame.Size = UDim2.new(1, -16, 1, -52)
+ContentFrame.Position = UDim2.new(0, 8, 0, 46)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.ScrollBarThickness = 4
+ContentFrame.BorderSizePixel = 0
+ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ContentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ContentFrame.Parent = MainFrame
+
+local ContentLayout = Instance.new("UIListLayout")
+ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ContentLayout.Padding = UDim.new(0, 8)
+ContentLayout.Parent = ContentFrame
+
+-- Helper: Create Section Header
+local function CreateSection(title)
+    local Section = Instance.new("Frame")
+    Section.Size = UDim2.new(1, 0, 0, 30)
+    Section.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    Section.BorderSizePixel = 0
+    Section.Parent = ContentFrame
+    
+    local SectionCorner = Instance.new("UICorner")
+    SectionCorner.CornerRadius = UDim.new(0, 6)
+    SectionCorner.Parent = Section
+    
+    local SectionTitle = Instance.new("TextLabel")
+    SectionTitle.Size = UDim2.new(1, -10, 1, 0)
+    SectionTitle.Position = UDim2.new(0, 10, 0, 0)
+    SectionTitle.BackgroundTransparency = 1
+    SectionTitle.Text = title
+    SectionTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+    SectionTitle.TextSize = 14
+    SectionTitle.Font = Enum.Font.GothamBold
+    SectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+    SectionTitle.Parent = Section
+    
+    return Section
+end
+
+-- Helper: Create Toggle
+local function CreateToggle(text, defaultValue, callback)
+    local Toggle = Instance.new("Frame")
+    Toggle.Size = UDim2.new(1, 0, 0, 45)
+    Toggle.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    Toggle.BorderSizePixel = 0
+    Toggle.Parent = ContentFrame
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 6)
+    ToggleCorner.Parent = Toggle
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -65, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = text
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Toggle
+    
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0, 50, 0, 28)
+    Button.Position = UDim2.new(1, -55, 0.5, -14)
+    Button.BackgroundColor3 = defaultValue and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    Button.Text = defaultValue and "ON" or "OFF"
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = 12
+    Button.Font = Enum.Font.GothamBold
+    Button.Parent = Toggle
+    
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 5)
+    ButtonCorner.Parent = Button
+    
+    local value = defaultValue
+    Button.MouseButton1Click:Connect(function()
+        value = not value
+        Button.BackgroundColor3 = value and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+        Button.Text = value and "ON" or "OFF"
+        if callback then callback(value) end
+    end)
+    
+    return Toggle, function() return value end, function(newValue)
+        value = newValue
+        Button.BackgroundColor3 = value and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+        Button.Text = value and "ON" or "OFF"
+    end
+end
+
+-- Helper: Create Slider
+local function CreateSlider(text, min, max, default, callback)
+    local Slider = Instance.new("Frame")
+    Slider.Size = UDim2.new(1, 0, 0, 60)
+    Slider.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    Slider.BorderSizePixel = 0
+    Slider.Parent = ContentFrame
+    
+    local SliderCorner = Instance.new("UICorner")
+    SliderCorner.CornerRadius = UDim.new(0, 6)
+    SliderCorner.Parent = Slider
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -20, 0, 22)
+    Label.Position = UDim2.new(0, 10, 0, 5)
+    Label.BackgroundTransparency = 1
+    Label.Text = text .. ": " .. tostring(default)
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Slider
+    
+    local SliderBar = Instance.new("Frame")
+    SliderBar.Size = UDim2.new(1, -20, 0, 5)
+    SliderBar.Position = UDim2.new(0, 10, 0, 35)
+    SliderBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+    SliderBar.BorderSizePixel = 0
+    SliderBar.Parent = Slider
+    
+    local SliderBarCorner = Instance.new("UICorner")
+    SliderBarCorner.CornerRadius = UDim.new(1, 0)
+    SliderBarCorner.Parent = SliderBar
+    
+    local SliderFill = Instance.new("Frame")
+    SliderFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    SliderFill.BackgroundColor3 = Color3.fromRGB(54, 57, 241)
+    SliderFill.BorderSizePixel = 0
+    SliderFill.Parent = SliderBar
+    
+    local SliderFillCorner = Instance.new("UICorner")
+    SliderFillCorner.CornerRadius = UDim.new(1, 0)
+    SliderFillCorner.Parent = SliderFill
+    
+    local SliderButton = Instance.new("TextButton")
+    SliderButton.Size = UDim2.new(0, 18, 0, 18)
+    SliderButton.Position = UDim2.new((default - min) / (max - min), -9, 0.5, -9)
+    SliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    SliderButton.Text = ""
+    SliderButton.Parent = SliderBar
+    
+    local SliderButtonCorner = Instance.new("UICorner")
+    SliderButtonCorner.CornerRadius = UDim.new(1, 0)
+    SliderButtonCorner.Parent = SliderButton
+    
+    local value = default
+    local dragging = false
+    
+    SliderButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local mousePos = UserInputService:GetMouseLocation().X
+            local barPos = SliderBar.AbsolutePosition.X
+            local barSize = SliderBar.AbsoluteSize.X
+            local relativePos = math.clamp((mousePos - barPos) / barSize, 0, 1)
+            
+            value = math.floor(min + (max - min) * relativePos)
+            SliderFill.Size = UDim2.new(relativePos, 0, 1, 0)
+            SliderButton.Position = UDim2.new(relativePos, -9, 0.5, -9)
+            Label.Text = text .. ": " .. tostring(value)
+            
+            if callback then callback(value) end
+        end
+    end)
+    
+    return Slider, function() return value end, function(newValue)
+        value = math.clamp(newValue, min, max)
+        local relativePos = (value - min) / (max - min)
+        SliderFill.Size = UDim2.new(relativePos, 0, 1, 0)
+        SliderButton.Position = UDim2.new(relativePos, -9, 0.5, -9)
+        Label.Text = text .. ": " .. tostring(value)
+    end
+end
+
+-- Helper: Create Dropdown
+local function CreateDropdown(text, options, default, callback)
+    local Dropdown = Instance.new("Frame")
+    Dropdown.Size = UDim2.new(1, 0, 0, 45)
+    Dropdown.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    Dropdown.BorderSizePixel = 0
+    Dropdown.Parent = ContentFrame
+    
+    local DropdownCorner = Instance.new("UICorner")
+    DropdownCorner.CornerRadius = UDim.new(0, 6)
+    DropdownCorner.Parent = Dropdown
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.4, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = text
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = 12
+    Label.Font = Enum.Font.Gotham
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Dropdown
+    
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(0.55, 0, 0, 32)
+    Button.Position = UDim2.new(0.43, 0, 0.5, -16)
+    Button.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    Button.Text = default
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = 11
+    Button.Font = Enum.Font.Gotham
+    Button.Parent = Dropdown
+    
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 5)
+    ButtonCorner.Parent = Button
+    
+    local OptionsFrame = Instance.new("Frame")
+    OptionsFrame.Size = UDim2.new(0.55, 0, 0, #options * 32)
+    OptionsFrame.Position = UDim2.new(0.43, 0, 1, 5)
+    OptionsFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    OptionsFrame.BorderSizePixel = 0
+    OptionsFrame.Visible = false
+    OptionsFrame.ZIndex = 10
+    OptionsFrame.Parent = Dropdown
+    
+    local OptionsCorner = Instance.new("UICorner")
+    OptionsCorner.CornerRadius = UDim.new(0, 5)
+    OptionsCorner.Parent = OptionsFrame
+    
+    local OptionsLayout = Instance.new("UIListLayout")
+    OptionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    OptionsLayout.Parent = OptionsFrame
+    
+    local value = default
+    
+    for _, option in pairs(options) do
+        local OptionButton = Instance.new("TextButton")
+        OptionButton.Size = UDim2.new(1, 0, 0, 32)
+        OptionButton.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+        OptionButton.Text = option
+        OptionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        OptionButton.TextSize = 11
+        OptionButton.Font = Enum.Font.Gotham
+        OptionButton.BorderSizePixel = 0
+        OptionButton.ZIndex = 11
+        OptionButton.Parent = OptionsFrame
+        
+        OptionButton.MouseButton1Click:Connect(function()
+            value = option
+            Button.Text = option
+            OptionsFrame.Visible = false
+            if callback then callback(option) end
+        end)
+    end
+    
+    Button.MouseButton1Click:Connect(function()
+        OptionsFrame.Visible = not OptionsFrame.Visible
+    end)
+    
+    return Dropdown, function() return value end, function(newValue)
+        value = newValue
+        Button.Text = newValue
+    end
+end
+
+-- Helper: Create Button
+local function CreateButton(text, callback)
+    local Button = Instance.new("TextButton")
+    Button.Size = UDim2.new(1, 0, 0, 40)
+    Button.BackgroundColor3 = Color3.fromRGB(54, 57, 241)
+    Button.Text = text
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.TextSize = 13
+    Button.Font = Enum.Font.GothamBold
+    Button.BorderSizePixel = 0
+    Button.Parent = ContentFrame
+    
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 6)
+    ButtonCorner.Parent = Button
+    
+    Button.MouseButton1Click:Connect(function()
+        if callback then callback() end
+    end)
+    
+    return Button
+end
+
+-- Helper: Create TextInput
+local function CreateTextInput(placeholderText, callback)
+    local InputFrame = Instance.new("Frame")
+    InputFrame.Size = UDim2.new(1, 0, 0, 45)
+    InputFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    InputFrame.BorderSizePixel = 0
+    InputFrame.Parent = ContentFrame
+    
+    local InputCorner = Instance.new("UICorner")
+    InputCorner.CornerRadius = UDim.new(0, 6)
+    InputCorner.Parent = InputFrame
+    
+    local TextBox = Instance.new("TextBox")
+    TextBox.Size = UDim2.new(1, -16, 1, -8)
+    TextBox.Position = UDim2.new(0, 8, 0, 4)
+    TextBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    TextBox.PlaceholderText = placeholderText
+    TextBox.Text = ""
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.PlaceholderColor3 = Color3.fromRGB(140, 140, 140)
+    TextBox.TextSize = 12
+    TextBox.Font = Enum.Font.Gotham
+    TextBox.ClearTextOnFocus = false
+    TextBox.Parent = InputFrame
+    
+    local TextBoxCorner = Instance.new("UICorner")
+    TextBoxCorner.CornerRadius = UDim.new(0, 5)
+    TextBoxCorner.Parent = TextBox
+    
+    if callback then
+        TextBox.FocusLost:Connect(function()
+            callback(TextBox.Text)
+        end)
+    end
+    
+    return InputFrame, TextBox
+end
+
+--[[
+    ═══════════════════════════════════════════════════════════
+                        BUILD GUI SECTIONS
+    ═══════════════════════════════════════════════════════════
+]]
+
+-- Main Settings
+CreateSection("Main Settings")
+
+local _, getEnabled, setEnabled = CreateToggle("Silent Aim Enabled", SilentAimSettings.Enabled, function(value)
+    SilentAimSettings.Enabled = value
+    mouse_box.Visible = value
+end)
+
+local _, getTeamCheck, setTeamCheck = CreateToggle("Team Check", SilentAimSettings.TeamCheck, function(value)
+    SilentAimSettings.TeamCheck = value
+end)
+
+local _, getVisibleCheck, setVisibleCheck = CreateToggle("Visible Check", SilentAimSettings.VisibleCheck, function(value)
+    SilentAimSettings.VisibleCheck = value
+end)
+
+local _, getTargetPart, setTargetPart = CreateDropdown("Target Part", {"Head", "HumanoidRootPart", "Random"}, SilentAimSettings.TargetPart, function(value)
+    SilentAimSettings.TargetPart = value
+end)
+
+local _, getMethod, setMethod = CreateDropdown("Aim Method", {
+    "Raycast",
+    "FindPartOnRay",
+    "FindPartOnRayWithWhitelist",
+    "FindPartOnRayWithIgnoreList",
+    "Mouse.Hit/Target"
+}, SilentAimSettings.SilentAimMethod, function(value)
+    SilentAimSettings.SilentAimMethod = value
+end)
+
+local _, getHitChance, setHitChance = CreateSlider("Hit Chance", 0, 100, SilentAimSettings.HitChance, function(value)
+    SilentAimSettings.HitChance = value
+end)
+
+-- FOV Settings
+CreateSection("FOV Settings")
+
+local _, getFOVVisible, setFOVVisible = CreateToggle("Show FOV Circle", SilentAimSettings.FOVVisible, function(value)
+    SilentAimSettings.FOVVisible = value
+    fov_circle.Visible = value
+end)
+
+local _, getFOVRadius, setFOVRadius = CreateSlider("FOV Radius", 0, 360, SilentAimSettings.FOVRadius, function(value)
+    SilentAimSettings.FOVRadius = value
+    fov_circle.Radius = value
+end)
+
+local _, getShowTarget, setShowTarget = CreateToggle("Show Target Box", SilentAimSettings.ShowSilentAimTarget, function(value)
+    SilentAimSettings.ShowSilentAimTarget = value
+end)
+
+-- Prediction Settings
+CreateSection("Prediction (Mouse.Hit/Target)")
+
+local _, getPrediction, setPrediction = CreateToggle("Enable Prediction", SilentAimSettings.MouseHitPrediction, function(value)
+    SilentAimSettings.MouseHitPrediction = value
+end)
+
+local _, getPredAmount, setPredAmount = CreateSlider("Prediction Amount", 0, 1000, math.floor(SilentAimSettings.MouseHitPredictionAmount * 1000), function(value)
+    SilentAimSettings.MouseHitPredictionAmount = value / 1000
+    PredictionAmount = value / 1000
+end)
+
+-- Configuration
+CreateSection("Configuration")
+
+local configNameInput, configTextBox = CreateTextInput("Enter config name...")
+
+CreateButton("Save Configuration", function()
+    local configName = configTextBox.Text
+    if configName and configName ~= "" then
+        SaveConfig(configName)
+        configTextBox.Text = ""
+    end
+end)
+
+local savedConfigs = GetFiles()
+local _, getLoadConfig, setLoadConfig = CreateDropdown("Load Config", #savedConfigs > 0 and savedConfigs or {"No configs"}, #savedConfigs > 0 and savedConfigs[1] or "No configs", function(value)
+    if value ~= "No configs" then
+        LoadFile(value)
+        
+        -- Update GUI after loading
+        setEnabled(SilentAimSettings.Enabled)
+        setTeamCheck(SilentAimSettings.TeamCheck)
+        setVisibleCheck(SilentAimSettings.VisibleCheck)
+        setTargetPart(SilentAimSettings.TargetPart)
+        setMethod(SilentAimSettings.SilentAimMethod)
+        setFOVVisible(SilentAimSettings.FOVVisible)
+        setFOVRadius(SilentAimSettings.FOVRadius)
+        setShowTarget(SilentAimSettings.ShowSilentAimTarget)
+        setPrediction(SilentAimSettings.MouseHitPrediction)
+        setPredAmount(math.floor(SilentAimSettings.MouseHitPredictionAmount * 1000))
+        setHitChance(SilentAimSettings.HitChance)
+    end
+end)
+
+--[[
+    ═══════════════════════════════════════════════════════════
+                    FLOATING TOGGLE BUTTONS
+    ═══════════════════════════════════════════════════════════
+]]
+
+-- Menu Toggle Button
+local MenuToggle = Instance.new("TextButton")
+MenuToggle.Name = "MenuToggle"
+MenuToggle.Size = UDim2.new(0, 55, 0, 55)
+MenuToggle.Position = UDim2.new(1, -65, 0.5, -80)
+MenuToggle.BackgroundColor3 = Color3.fromRGB(54, 57, 241)
+MenuToggle.Text = "GUI"
+MenuToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+MenuToggle.TextSize = 28
+MenuToggle.Font = Enum.Font.GothamBold
+MenuToggle.Active = true
+MenuToggle.Draggable = true
+MenuToggle.Parent = ScreenGui
+
+local MenuToggleCorner = Instance.new("UICorner")
+MenuToggleCorner.CornerRadius = UDim.new(1, 0)
+MenuToggleCorner.Parent = MenuToggle
+
+MenuToggle.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
+
+-- Silent Aim Toggle Button
+local SAToggle = Instance.new("TextButton")
+SAToggle.Name = "SAToggle"
+SAToggle.Size = UDim2.new(0, 55, 0, 55)
+SAToggle.Position = UDim2.new(1, -65, 0.5, -10)
+SAToggle.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+SAToggle.Text = "AIM"
+SAToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SAToggle.TextSize = 16
+SAToggle.Font = Enum.Font.GothamBold
+SAToggle.Active = true
+SAToggle.Draggable = true
+SAToggle.Parent = ScreenGui
+
+local SAToggleCorner = Instance.new("UICorner")
+SAToggleCorner.CornerRadius = UDim.new(1, 0)
+SAToggleCorner.Parent = SAToggle
+
+SAToggle.MouseButton1Click:Connect(function()
+    SilentAimSettings.Enabled = not SilentAimSettings.Enabled
+    setEnabled(SilentAimSettings.Enabled)
+    SAToggle.BackgroundColor3 = SilentAimSettings.Enabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+--[[
+    ═══════════════════════════════════════════════════════════
+                        RENDER LOOP
+    ═══════════════════════════════════════════════════════════
+]]
+
+resume(create(function()
+    RenderStepped:Connect(function()
+        -- Update SA button color
+        SAToggle.BackgroundColor3 = SilentAimSettings.Enabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+        
+        -- Update target box
+        if SilentAimSettings.ShowSilentAimTarget and SilentAimSettings.Enabled then
+            if getClosestPlayer() then
+                local Root = getClosestPlayer().Parent.PrimaryPart or getClosestPlayer()
+                local RootToViewportPoint, IsOnScreen = WorldToViewportPoint(Camera, Root.Position);
+                
+                mouse_box.Visible = IsOnScreen
+                mouse_box.Position = Vector2.new(RootToViewportPoint.X, RootToViewportPoint.Y)
+            else
+                mouse_box.Visible = false
+                mouse_box.Position = Vector2.new()
+            end
+        end
+        
+        -- Update FOV circle
+        if SilentAimSettings.FOVVisible then
+            fov_circle.Visible = true
+            fov_circle.Position = getMousePosition()
+        end
+    end)
+end))
+
+--[[
+    ═══════════════════════════════════════════════════════════
+                            HOOKS
+    ═══════════════════════════════════════════════════════════
+]]
+
+-- hooks
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(...)
+    local Method = getnamecallmethod()
+    local Arguments = {...}
+    local self = Arguments[1]
+    local chance = CalculateChance(SilentAimSettings.HitChance)
+    if SilentAimSettings.Enabled and self == workspace and not checkcaller() and chance == true then
+        if Method == "FindPartOnRayWithIgnoreList" and SilentAimSettings.SilentAimMethod == Method then
+            if ValidateArguments(Arguments, ExpectedArguments.FindPartOnRayWithIgnoreList) then
+                local A_Ray = Arguments[2]
+
+                local HitPart = getClosestPlayer()
+                if HitPart then
+                    local Origin = A_Ray.Origin
+                    local Direction = getDirection(Origin, HitPart.Position)
+                    Arguments[2] = Ray.new(Origin, Direction)
+
+                    return oldNamecall(unpack(Arguments))
+                end
+            end
+        elseif Method == "FindPartOnRayWithWhitelist" and SilentAimSettings.SilentAimMethod == Method then
+            if ValidateArguments(Arguments, ExpectedArguments.FindPartOnRayWithWhitelist) then
+                local A_Ray = Arguments[2]
+
+                local HitPart = getClosestPlayer()
+                if HitPart then
+                    local Origin = A_Ray.Origin
+                    local Direction = getDirection(Origin, HitPart.Position)
+                    Arguments[2] = Ray.new(Origin, Direction)
+
+                    return oldNamecall(unpack(Arguments))
+                end
+            end
+        elseif (Method == "FindPartOnRay" or Method == "findPartOnRay") and SilentAimSettings.SilentAimMethod:lower() == Method:lower() then
+            if ValidateArguments(Arguments, ExpectedArguments.FindPartOnRay) then
+                local A_Ray = Arguments[2]
+
+                local HitPart = getClosestPlayer()
+                if HitPart then
+                    local Origin = A_Ray.Origin
+                    local Direction = getDirection(Origin, HitPart.Position)
+                    Arguments[2] = Ray.new(Origin, Direction)
+
+                    return oldNamecall(unpack(Arguments))
+                end
+            end
+        elseif Method == "Raycast" and SilentAimSettings.SilentAimMethod == Method then
+            if ValidateArguments(Arguments, ExpectedArguments.Raycast) then
+                local A_Origin = Arguments[2]
+
+                local HitPart = getClosestPlayer()
+                if HitPart then
+                    Arguments[3] = getDirection(A_Origin, HitPart.Position)
+
+                    return oldNamecall(unpack(Arguments))
+                end
+            end
+        end
+    end
+    return oldNamecall(...)
+end))
+
+local oldIndex = nil 
+oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, Index)
+    if self == Mouse and not checkcaller() and SilentAimSettings.Enabled and SilentAimSettings.SilentAimMethod == "Mouse.Hit/Target" and getClosestPlayer() then
+        local HitPart = getClosestPlayer()
+         
+        if Index == "Target" or Index == "target" then 
+            return HitPart
+        elseif Index == "Hit" or Index == "hit" then 
+            return ((SilentAimSettings.MouseHitPrediction and (HitPart.CFrame + (HitPart.Velocity * PredictionAmount))) or (not SilentAimSettings.MouseHitPrediction and HitPart.CFrame))
+        elseif Index == "X" or Index == "x" then 
+            return self.X 
+        elseif Index == "Y" or Index == "y" then 
+            return self.Y 
+        elseif Index == "UnitRay" then 
+            return Ray.new(self.Origin, (self.Hit - self.Origin).Unit)
+        end
+    end
+
+    return oldIndex(self, Index)
+end))
+
+print("[Silent Aim] Mobile-optimized GUI loaded!")
+print("[Silent Aim] Tap 'GUI' button to open menu")
+print("[Silent Aim] Tap 'AIM' button to toggle Silent Aim")
