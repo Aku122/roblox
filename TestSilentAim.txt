@@ -1,5 +1,6 @@
+
 -- Universal Silent Aim - Mobile Optimized GUI
--- Giữ nguyên toàn bộ chức năng, chỉ thay đổi GUI
+-- Advanced Features Edition
 
 -- init
 if not game:IsLoaded() then
@@ -13,7 +14,7 @@ end
 local SilentAimSettings = {
     Enabled = false,
 
-    ClassName = "Universal Silent Aim - Averiias, Stefanuk12, xaxa",
+    ClassName = "Universal Silent Aim - Mobile Advanced",
     ToggleKey = "RightAlt",
 
     TeamCheck = false,
@@ -30,34 +31,40 @@ local SilentAimSettings = {
     HitChance = 100,
     
     -- Advanced Prediction
-    AutoPrediction = false, -- Tự động điều chỉnh prediction dựa trên ping
-    PredictionMultiplier = 1.0, -- Nhân với prediction amount
+    AutoPrediction = false,
+    PredictionMultiplier = 1.0,
 
     -- New settings
-    TargetPriority = "Closest", -- "Closest" or "Farthest"
-    MaxDistance = 5000, -- Maximum aim distance
-    TeamAimTarget = "None", -- Specific team to target or "None"
+    TargetPriority = "Closest",
+    MaxDistance = 5000,
+    TeamAimTarget = "None",
 
     -- Target Lock settings
     TargetLocked = false,
-    LockedTarget = nil, -- Locked player reference
-    
-    -- Focus Mode settings (from original SilentAim)
-    FocusMode = false, -- Only aim at focused target
-    FocusedPlayer = nil,
+    LockedTarget = nil,
 
-    -- FOV Aimbot settings (camera lock)
+    -- FOV Aimbot settings
     FOVAimbotEnabled = false,
     FOVAimbotRadius = 200,
     FOVAimbotMaxDistance = 1000,
-    FOVAimbotSmoothness = 0.3, -- 0.1-1.0, lower = smoother
-    FOVAimbotLockOnly = false, -- Only aim when target is locked
+    FOVAimbotSmoothness = 0.3,
+    FOVAimbotLockOnly = false,
+
+    -- Whitelist Mode (NEW)
+    WhitelistMode = false,
+    WhitelistedPlayers = {},
+
+    -- Multi-Method Support (NEW)
+    EnabledMethods = {"Raycast"}, -- Can enable multiple methods at once
+    
+    -- Advanced Hook Settings (NEW)
+    StrictArgumentValidation = true, -- Validate arguments before hooking
+    CustomCFrameModifier = false, -- Use custom CFrame modification
 }
 
 -- variables
 getgenv().SilentAimSettings = SilentAimSettings
 local MainFileName = "UniversalSilentAim"
-local SelectedFile, FileToSave = "", ""
 
 local Camera = workspace.CurrentCamera
 local Players = game:GetService("Players")
@@ -78,14 +85,64 @@ local WorldToViewportPoint = Camera.WorldToViewportPoint
 local GetPartsObscuringTarget = Camera.GetPartsObscuringTarget
 local FindFirstChild = game.FindFirstChild
 local RenderStepped = RunService.RenderStepped
-local GuiInset = GuiService.GetGuiInset
-local GetMouseLocation = UserInputService.GetMouseLocation
 
 local resume = coroutine.resume
 local create = coroutine.create
 
 local ValidTargetParts = {"Head", "HumanoidRootPart"}
 local PredictionAmount = 0.165
+
+-- Method Resolve System (NEW - from SilentAim.lua)
+local MethodResolve = {
+    -- __namecall methods
+    raycast = {
+        Real = "Raycast",
+        Metamethod = "__namecall",
+        Aliases = {"raycast", "Raycast"}
+    },
+    findpartonray = {
+        Real = "FindPartOnRay",
+        Metamethod = "__namecall",
+        Aliases = {"findPartOnRay", "FindPartOnRay"}
+    },
+    findpartonraywithwhitelist = {
+        Real = "FindPartOnRayWithWhitelist",
+        Metamethod = "__namecall",
+        Aliases = {"findPartOnRayWithWhitelist", "FindPartOnRayWithWhitelist"}
+    },
+    findpartonraywithignorelist = {
+        Real = "FindPartOnRayWithIgnoreList",
+        Metamethod = "__namecall",
+        Aliases = {"findPartOnRayWithIgnoreList", "FindPartOnRayWithIgnoreList"}
+    },
+
+    -- __index methods
+    target = {
+        Real = "Target",
+        Metamethod = "__index",
+        Aliases = {"target", "Target"}
+    },
+    hit = {
+        Real = "Hit",
+        Metamethod = "__index",
+        Aliases = {"hit", "Hit"}
+    },
+    x = {
+        Real = "X",
+        Metamethod = "__index",
+        Aliases = {"x", "X"}
+    },
+    y = {
+        Real = "Y",
+        Metamethod = "__index",
+        Aliases = {"y", "Y"}
+    },
+    unitray = {
+        Real = "UnitRay",
+        Metamethod = "__index",
+        Aliases = {"unitray", "UnitRay"}
+    },
+}
 
 local mouse_box = Drawing.new("Square")
 mouse_box.Visible = false
@@ -106,7 +163,6 @@ fov_circle.ZIndex = 999
 fov_circle.Transparency = 1
 fov_circle.Color = Color3.fromRGB(54, 57, 241)
 
--- FOV Aimbot circle (different color)
 local fov_aimbot_circle = Drawing.new("Circle")
 fov_aimbot_circle.Thickness = 2
 fov_aimbot_circle.NumSides = 100
@@ -115,9 +171,8 @@ fov_aimbot_circle.Filled = false
 fov_aimbot_circle.Visible = false
 fov_aimbot_circle.ZIndex = 998
 fov_aimbot_circle.Transparency = 1
-fov_aimbot_circle.Color = Color3.fromRGB(255, 165, 0) -- Orange color
+fov_aimbot_circle.Color = Color3.fromRGB(255, 165, 0)
 
--- ESP Drawing objects for target player
 local esp_box = Drawing.new("Square")
 esp_box.Thickness = 2
 esp_box.Color = Color3.fromRGB(255, 255, 0)
@@ -151,7 +206,6 @@ esp_tracer.Visible = false
 esp_tracer.ZIndex = 998
 esp_tracer.Transparency = 1
 
--- ESP All system (info.lua style)
 local ESPAllEnabled = false
 
 local ExpectedArguments = {
@@ -187,9 +241,67 @@ function CalculateChance(Percentage)
     return chance <= Percentage / 100
 end
 
---[[file handling]] do
+-- Validate Arguments (NEW - from SilentAim.lua)
+local function ValidateArguments(Args, RayMethod)
+    if not SilentAimSettings.StrictArgumentValidation then
+        return true
+    end
+
+    local Matches = 0
+    if #Args < RayMethod.ArgCountRequired then
+        return false
+    end
+    for Pos, Argument in next, Args do
+        if typeof(Argument) == RayMethod.Args[Pos] then
+            Matches = Matches + 1
+        end
+    end
+    return Matches >= RayMethod.ArgCountRequired
+end
+
+-- Check if method is enabled (NEW)
+local function IsMethodEnabled(Method)
+    local LoweredMethod = string.lower(Method)
+    local MethodData = MethodResolve[LoweredMethod]
+    
+    if not MethodData then
+        return false, nil
+    end
+    
+    -- Check if method is in enabled methods list
+    for _, enabledMethod in ipairs(SilentAimSettings.EnabledMethods) do
+        if enabledMethod == MethodData.Real then
+            return true, MethodData.Real
+        end
+    end
+    
+    return false, MethodData.Real
+end
+
+-- Toggle Method (NEW)
+function SilentAimSettings.ToggleMethod(Method, State)
+    local found = false
+    local foundIndex = nil
+    
+    for i, enabledMethod in ipairs(SilentAimSettings.EnabledMethods) do
+        if enabledMethod == Method then
+            found = true
+            foundIndex = i
+            break
+        end
+    end
+    
+    if State and not found then
+        table.insert(SilentAimSettings.EnabledMethods, Method)
+    elseif not State and found then
+        table.remove(SilentAimSettings.EnabledMethods, foundIndex)
+    end
+end
+
+-- File handling
+do
     if not isfolder(MainFileName) then
-        makefolder(MainFileName);
+        makefolder(MainFileName)
     end
 
     if not isfolder(string.format("%s/%s", MainFileName, tostring(game.PlaceId))) then
@@ -199,7 +311,6 @@ end
 
 local Files = listfiles(string.format("%s/%s", "UniversalSilentAim", tostring(game.PlaceId)))
 
--- functions
 local function GetFiles()
     local out = {}
     for i = 1, #Files do
@@ -232,12 +343,12 @@ local function GetTeamsList()
 end
 
 local function UpdateFile(FileName)
-    assert(FileName or FileName == "string", "oopsies");
+    assert(FileName or FileName == "string", "oopsies")
     writefile(string.format("%s/%s/%s.lua", MainFileName, tostring(game.PlaceId), FileName), HttpService:JSONEncode(SilentAimSettings))
 end
 
 local function LoadFile(FileName)
-    assert(FileName or FileName == "string", "oopsies");
+    assert(FileName or FileName == "string", "oopsies")
 
     local File = string.format("%s/%s/%s.lua", MainFileName, tostring(game.PlaceId), FileName)
     local ConfigData = HttpService:JSONDecode(readfile(File))
@@ -251,25 +362,12 @@ local function getPositionOnScreen(Vector)
     return Vector2.new(Vec3.X, Vec3.Y), OnScreen
 end
 
-local function ValidateArguments(Args, RayMethod)
-    local Matches = 0
-    if #Args < RayMethod.ArgCountRequired then
-        return false
-    end
-    for Pos, Argument in next, Args do
-        if typeof(Argument) == RayMethod.Args[Pos] then
-            Matches = Matches + 1
-        end
-    end
-    return Matches >= RayMethod.ArgCountRequired
-end
-
 local function getDirection(Origin, Position)
     return (Position - Origin).Unit * 1000
 end
 
 local function getMousePosition()
-    return GetMouseLocation(UserInputService)
+    return UserInputService:GetMouseLocation()
 end
 
 local function IsPlayerVisible(Player)
@@ -288,9 +386,35 @@ local function IsPlayerVisible(Player)
     return ((ObscuringObjects == 0 and true) or (ObscuringObjects > 0 and false))
 end
 
--- Get closest player for FOV Aimbot (camera lock)
+-- Whitelist Check (NEW)
+local function IsPlayerWhitelisted(Player)
+    for _, whitelistedPlayer in ipairs(SilentAimSettings.WhitelistedPlayers) do
+        if whitelistedPlayer == Player then
+            return true
+        end
+    end
+    return false
+end
+
+-- Custom CFrame Modifier (NEW)
+local function ModifyCFrame(TargetPart, OnScreen)
+    if SilentAimSettings.CustomCFrameModifier then
+        -- Add velocity prediction
+        local velocity = TargetPart.Velocity
+        local predAmount = PredictionAmount * SilentAimSettings.PredictionMultiplier
+        
+        if SilentAimSettings.AutoPrediction then
+            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+            predAmount = predAmount * (1 + (ping / 1000))
+        end
+        
+        return TargetPart.Position + (velocity * predAmount)
+    else
+        return OnScreen and TargetPart.Position or TargetPart.CFrame
+    end
+end
+
 local function getClosestPlayerForAimbot()
-    -- If FOV Aimbot Lock Only mode and target is locked
     if SilentAimSettings.FOVAimbotLockOnly and SilentAimSettings.TargetLocked and SilentAimSettings.LockedTarget then
         local LockedPlayer = SilentAimSettings.LockedTarget
 
@@ -306,7 +430,6 @@ local function getClosestPlayerForAimbot()
             local Humanoid = FindFirstChild(Character, "Humanoid")
 
             if HumanoidRootPart and Humanoid then
-                -- Ignore visible check when locked, allow aiming through walls
                 local TargetPart = FindFirstChild(Character, "Head") or HumanoidRootPart
                 return TargetPart, LockedPlayer
             end
@@ -314,12 +437,10 @@ local function getClosestPlayerForAimbot()
         return nil
     end
 
-    -- If Lock Only mode but no target locked, return nothing
     if SilentAimSettings.FOVAimbotLockOnly then
         return nil
     end
 
-    -- Normal FOV Aimbot targeting
     local Closest
     local ClosestPlayer
     local DistanceToCenter
@@ -328,6 +449,13 @@ local function getClosestPlayerForAimbot()
         if Player == LocalPlayer then continue end
 
         if SilentAimSettings.TeamCheck and Player.Team == LocalPlayer.Team then continue end
+
+        -- Whitelist Mode Check (NEW)
+        if SilentAimSettings.WhitelistMode then
+            if not IsPlayerWhitelisted(Player) then
+                continue
+            end
+        end
 
         if SilentAimSettings.TeamAimTarget ~= "None" then
             if not Player.Team or Player.Team.Name ~= SilentAimSettings.TeamAimTarget then
@@ -344,7 +472,6 @@ local function getClosestPlayerForAimbot()
         local Humanoid = FindFirstChild(Character, "Humanoid")
         if not HumanoidRootPart or not Humanoid or Humanoid.Health <= 0 then continue end
 
-        -- Check distance from player
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local dist = (LocalPlayer.Character.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude
             if dist > SilentAimSettings.FOVAimbotMaxDistance then continue end
@@ -368,34 +495,10 @@ end
 local function getClosestPlayer()
     if not SilentAimSettings.TargetPart then return end
 
-    -- If Focus Mode is enabled and a player is focused
-    if SilentAimSettings.FocusMode and SilentAimSettings.FocusedPlayer then
-        local FocusedPlayer = SilentAimSettings.FocusedPlayer
-        
-        -- Check if player is still in game
-        if not FocusedPlayer.Parent then
-            SilentAimSettings.FocusedPlayer = nil
-        else
-            local Character = FocusedPlayer.Character
-            if Character then
-                local HumanoidRootPart = FindFirstChild(Character, "HumanoidRootPart")
-                local Humanoid = FindFirstChild(Character, "Humanoid")
-                
-                if HumanoidRootPart and Humanoid then
-                    local TargetPart = ((SilentAimSettings.TargetPart == "Random" and Character[ValidTargetParts[math.random(1, #ValidTargetParts)]]) or Character[SilentAimSettings.TargetPart])
-                    return TargetPart, FocusedPlayer
-                end
-            end
-        end
-    end
-
-    -- If target is locked, return locked target
     if SilentAimSettings.TargetLocked and SilentAimSettings.LockedTarget then
         local LockedPlayer = SilentAimSettings.LockedTarget
 
-        -- Check if player is still in game
         if not LockedPlayer.Parent then
-            -- Player left the server, unlock
             SilentAimSettings.TargetLocked = false
             SilentAimSettings.LockedTarget = nil
         else
@@ -405,18 +508,15 @@ local function getClosestPlayer()
                 local HumanoidRootPart = FindFirstChild(Character, "HumanoidRootPart")
                 local Humanoid = FindFirstChild(Character, "Humanoid")
 
-                -- Keep lock even if player is dead, only unlock when player leaves or manual unlock
                 if HumanoidRootPart and Humanoid then
                     local TargetPart = ((SilentAimSettings.TargetPart == "Random" and Character[ValidTargetParts[math.random(1, #ValidTargetParts)]]) or Character[SilentAimSettings.TargetPart])
                     return TargetPart, LockedPlayer
                 end
             end
-            -- Character may be nil when respawning, keep lock
             return nil, LockedPlayer
         end
     end
 
-    -- Normal targeting logic
     local Closest
     local ClosestPlayer
     local DistanceToMouse
@@ -424,10 +524,15 @@ local function getClosestPlayer()
     for _, Player in next, GetPlayers(Players) do
         if Player == LocalPlayer then continue end
 
-        -- Team Check
         if SilentAimSettings.TeamCheck and Player.Team == LocalPlayer.Team then continue end
 
-        -- Team Aim Target Check
+        -- Whitelist Mode Check (NEW)
+        if SilentAimSettings.WhitelistMode then
+            if not IsPlayerWhitelisted(Player) then
+                continue
+            end
+        end
+
         if SilentAimSettings.TeamAimTarget ~= "None" then
             if not Player.Team or Player.Team.Name ~= SilentAimSettings.TeamAimTarget then
                 continue
@@ -448,10 +553,8 @@ local function getClosestPlayer()
 
         local Distance = (getMousePosition() - ScreenPosition).Magnitude
 
-        -- Apply max distance filter
         if Distance > SilentAimSettings.MaxDistance then continue end
 
-        -- Apply target priority logic
         if SilentAimSettings.TargetPriority == "Closest" then
             if Distance <= (DistanceToMouse or SilentAimSettings.FOVRadius or 2000) then
                 Closest = ((SilentAimSettings.TargetPart == "Random" and Character[ValidTargetParts[math.random(1, #ValidTargetParts)]]) or Character[SilentAimSettings.TargetPart])
@@ -471,7 +574,7 @@ end
 
 --[[
     ═══════════════════════════════════════════════════════════
-                    MOBILE-OPTIMIZED GUI (COMPACT)
+                    MOBILE-OPTIMIZED GUI
     ═══════════════════════════════════════════════════════════
 ]]
 
@@ -482,7 +585,6 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 pcall(function() protectgui(ScreenGui) end)
 ScreenGui.Parent = game:GetService("CoreGui")
 
--- Main Frame (More Compact for Mobile)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 280, 0, 400)
@@ -498,7 +600,6 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 8)
 MainCorner.Parent = MainFrame
 
--- Title Bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Name = "TitleBar"
 TitleBar.Size = UDim2.new(1, 0, 0, 35)
@@ -521,7 +622,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -70, 1, 0)
 TitleLabel.Position = UDim2.new(0, 8, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "Silent Aim"
+TitleLabel.Text = "Silent Aim Advanced"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.GothamBold
@@ -546,7 +647,6 @@ CloseButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
--- Content ScrollingFrame
 local ContentFrame = Instance.new("ScrollingFrame")
 ContentFrame.Name = "ContentFrame"
 ContentFrame.Size = UDim2.new(1, -12, 1, -43)
@@ -563,7 +663,6 @@ ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ContentLayout.Padding = UDim.new(0, 6)
 ContentLayout.Parent = ContentFrame
 
--- Helper: Create Section Header
 local function CreateSection(title)
     local Section = Instance.new("Frame")
     Section.Size = UDim2.new(1, 0, 0, 25)
@@ -589,7 +688,6 @@ local function CreateSection(title)
     return Section
 end
 
--- Helper: Create Toggle
 local function CreateToggle(text, defaultValue, callback)
     local Toggle = Instance.new("Frame")
     Toggle.Size = UDim2.new(1, 0, 0, 38)
@@ -641,7 +739,6 @@ local function CreateToggle(text, defaultValue, callback)
     end
 end
 
--- Helper: Create Slider
 local function CreateSlider(text, min, max, default, callback)
     local Slider = Instance.new("Frame")
     Slider.Size = UDim2.new(1, 0, 0, 52)
@@ -736,7 +833,6 @@ local function CreateSlider(text, min, max, default, callback)
     end
 end
 
--- Helper: Create Cycle Button (Click to cycle through options)
 local function CreateCycleButton(text, options, default, callback)
     local CycleFrame = Instance.new("Frame")
     CycleFrame.Size = UDim2.new(1, 0, 0, 38)
@@ -805,7 +901,6 @@ local function CreateCycleButton(text, options, default, callback)
     end
 end
 
--- Helper: Create Button
 local function CreateButton(text, callback)
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(1, 0, 0, 35)
@@ -828,7 +923,6 @@ local function CreateButton(text, callback)
     return Button
 end
 
--- Helper: Create TextInput
 local function CreateTextInput(placeholderText, callback)
     local InputFrame = Instance.new("Frame")
     InputFrame.Size = UDim2.new(1, 0, 0, 38)
@@ -867,12 +961,9 @@ local function CreateTextInput(placeholderText, callback)
 end
 
 --[[
-    ═══════════════════════════════════════════════════════════
-                        BUILD GUI SECTIONS
-    ═══════════════════════════════════════════════════════════
+    BUILD GUI SECTIONS
 ]]
 
--- Main Settings
 CreateSection("Main Settings")
 
 local _, getEnabled, setEnabled = CreateToggle("Silent Aim Enabled", SilentAimSettings.Enabled, function(value)
@@ -888,21 +979,9 @@ local _, getVisibleCheck, setVisibleCheck = CreateToggle("Visible Check", Silent
     SilentAimSettings.VisibleCheck = value
 end)
 
-local _, getFocusMode, setFocusMode = CreateToggle("Focus Mode", SilentAimSettings.FocusMode, function(value)
-    SilentAimSettings.FocusMode = value
-    if not value then
-        SilentAimSettings.FocusedPlayer = nil
-    end
-end)
-
-local _, getMethod, setMethod = CreateCycleButton("Aim Method", {
-    "Raycast",
-    "FindPartOnRay",
-    "FindPartOnRayWithWhitelist",
-    "FindPartOnRayWithIgnoreList",
-    "Mouse.Hit/Target"
-}, SilentAimSettings.SilentAimMethod, function(value)
-    SilentAimSettings.SilentAimMethod = value
+-- NEW: Whitelist Mode
+local _, getWhitelistMode, setWhitelistMode = CreateToggle("Whitelist Mode", SilentAimSettings.WhitelistMode, function(value)
+    SilentAimSettings.WhitelistMode = value
 end)
 
 local _, getTargetPart, setTargetPart = CreateCycleButton("Target Part", {"Head", "HumanoidRootPart", "Random"}, SilentAimSettings.TargetPart, function(value)
@@ -926,21 +1005,50 @@ local _, getMaxDistance, setMaxDistance = CreateSlider("Max Distance", 100, 5000
     SilentAimSettings.MaxDistance = value
 end)
 
--- ESP Settings
+-- NEW: Advanced Hook Settings
+CreateSection("Advanced Hook Settings")
+
+local _, getStrictValidation, setStrictValidation = CreateToggle("Strict Arg Validation", SilentAimSettings.StrictArgumentValidation, function(value)
+    SilentAimSettings.StrictArgumentValidation = value
+end)
+
+local _, getCustomCFrame, setCustomCFrame = CreateToggle("Custom CFrame Modifier", SilentAimSettings.CustomCFrameModifier, function(value)
+    SilentAimSettings.CustomCFrameModifier = value
+end)
+
+-- NEW: Method Selection (Multi-select simulation)
+CreateSection("Aim Methods")
+
+local methodToggles = {}
+local availableMethods = {"Raycast", "FindPartOnRay", "FindPartOnRayWithWhitelist", "FindPartOnRayWithIgnoreList", "Mouse.Hit/Target"}
+
+for _, method in ipairs(availableMethods) do
+    local isEnabled = false
+    for _, enabledMethod in ipairs(SilentAimSettings.EnabledMethods) do
+        if enabledMethod == method then
+            isEnabled = true
+            break
+        end
+    end
+    
+    local _, getMethodToggle, setMethodToggle = CreateToggle(method, isEnabled, function(value)
+        SilentAimSettings.ToggleMethod(method, value)
+    end)
+    
+    methodToggles[method] = {get = getMethodToggle, set = setMethodToggle}
+end
+
 CreateSection("ESP Settings")
 
--- Default ESP color setting (for non-team or default team color)
-local DefaultESPColor = Color3.fromRGB(255, 0, 0) -- Red by default
+local DefaultESPColor = Color3.fromRGB(255, 0, 0)
 
 local _, getESPAll, setESPAll = CreateToggle("ESP All Players", ESPAllEnabled, function(value)
     ESPAllEnabled = value
     
-    -- When ESP is enabled, create ESP for all existing players immediately
     if value then
         spawn(function()
             for _, player in pairs(GetPlayers(Players)) do
                 if player ~= LocalPlayer and player.Character then
-                    -- Check if should ESP this player
                     local shouldESP = true
 
                     if SilentAimSettings.TeamCheck and player.Team == LocalPlayer.Team then
@@ -967,7 +1075,6 @@ local _, getESPAll, setESPAll = CreateToggle("ESP All Players", ESPAllEnabled, f
             end
         end)
     else
-        -- Clean up all ESP when disabled
         for player, data in pairs(ESPObjects) do
             pcall(function()
                 if data.Highlight then
@@ -1007,7 +1114,6 @@ local _, getESPColor, setESPColor = CreateCycleButton("Default ESP Color", espCo
     end
 end)
 
--- FOV Aimbot Settings
 CreateSection("FOV Aimbot (Camera Lock)")
 
 local _, getFOVAimbot, setFOVAimbot = CreateToggle("FOV Aimbot Enabled", SilentAimSettings.FOVAimbotEnabled, function(value)
@@ -1032,7 +1138,6 @@ local _, getFOVAimbotSmooth, setFOVAimbotSmooth = CreateSlider("FOV Aim Smoothne
     SilentAimSettings.FOVAimbotSmoothness = value / 100
 end)
 
--- FOV Settings
 CreateSection("FOV Settings")
 
 local _, getFOVVisible, setFOVVisible = CreateToggle("Show FOV Circle", SilentAimSettings.FOVVisible, function(value)
@@ -1050,7 +1155,6 @@ local _, getShowTarget, setShowTarget = CreateToggle("Show Target Box", SilentAi
     mouse_box.Visible = value and SilentAimSettings.Enabled
 end)
 
--- Prediction Settings
 CreateSection("Prediction (Mouse.Hit/Target)")
 
 local _, getPrediction, setPrediction = CreateToggle("Enable Prediction", SilentAimSettings.MouseHitPrediction, function(value)
@@ -1070,7 +1174,6 @@ local _, getPredMultiplier, setPredMultiplier = CreateSlider("Prediction Multipl
     SilentAimSettings.PredictionMultiplier = value / 100
 end)
 
--- Configuration
 CreateSection("Configuration")
 
 local configNameInput, configTextBox = CreateTextInput("Enter config name...")
@@ -1088,12 +1191,11 @@ local _, getLoadConfig, setLoadConfig = CreateCycleButton("Load Config", #savedC
     if value ~= "No configs" then
         LoadFile(value)
 
-        -- Update GUI after loading
         setEnabled(SilentAimSettings.Enabled)
         setTeamCheck(SilentAimSettings.TeamCheck)
         setVisibleCheck(SilentAimSettings.VisibleCheck)
+        setWhitelistMode(SilentAimSettings.WhitelistMode or false)
         setTargetPart(SilentAimSettings.TargetPart)
-        setMethod(SilentAimSettings.SilentAimMethod)
         setTargetPriority(SilentAimSettings.TargetPriority)
         setTeamAim(SilentAimSettings.TeamAimTarget or "None")
         setFOVVisible(SilentAimSettings.FOVVisible)
@@ -1103,11 +1205,11 @@ local _, getLoadConfig, setLoadConfig = CreateCycleButton("Load Config", #savedC
         setPredAmount(math.floor(SilentAimSettings.MouseHitPredictionAmount * 1000))
         setHitChance(SilentAimSettings.HitChance)
         setMaxDistance(SilentAimSettings.MaxDistance)
-        setFocusMode(SilentAimSettings.FocusMode or false)
         setAutoPred(SilentAimSettings.AutoPrediction or false)
         setPredMultiplier(math.floor((SilentAimSettings.PredictionMultiplier or 1.0) * 100))
+        setStrictValidation(SilentAimSettings.StrictArgumentValidation or true)
+        setCustomCFrame(SilentAimSettings.CustomCFrameModifier or false)
 
-        -- Update visual elements
         fov_circle.Visible = SilentAimSettings.FOVVisible
         fov_circle.Radius = SilentAimSettings.FOVRadius
         mouse_box.Visible = SilentAimSettings.ShowSilentAimTarget and SilentAimSettings.Enabled
@@ -1115,12 +1217,9 @@ local _, getLoadConfig, setLoadConfig = CreateCycleButton("Load Config", #savedC
 end)
 
 --[[
-    ═══════════════════════════════════════════════════════════
-                    FLOATING TOGGLE BUTTONS
-    ═══════════════════════════════════════════════════════════
+    FLOATING TOGGLE BUTTONS
 ]]
 
--- Menu Toggle Button (góc trên bên trái)
 local MenuToggle = Instance.new("TextButton")
 MenuToggle.Name = "MenuToggle"
 MenuToggle.Size = UDim2.new(0, 50, 0, 50)
@@ -1142,7 +1241,6 @@ MenuToggle.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
 end)
 
--- ESP Toggle Button (cạnh GUI)
 local ESPToggle = Instance.new("TextButton")
 ESPToggle.Name = "ESPToggle"
 ESPToggle.Size = UDim2.new(0, 50, 0, 50)
@@ -1166,7 +1264,6 @@ ESPToggle.MouseButton1Click:Connect(function()
     ESPToggle.BackgroundColor3 = ESPAllEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
     
     if not ESPAllEnabled then
-        -- Clean up all ESP when disabled
         for player, data in pairs(ESPObjects) do
             pcall(function()
                 if data.Highlight then
@@ -1181,7 +1278,6 @@ ESPToggle.MouseButton1Click:Connect(function()
     end
 end)
 
--- FOV Aimbot Toggle Button (cạnh GUI)
 local FOVToggle = Instance.new("TextButton")
 FOVToggle.Name = "FOVToggle"
 FOVToggle.Size = UDim2.new(0, 50, 0, 50)
@@ -1206,7 +1302,6 @@ FOVToggle.MouseButton1Click:Connect(function()
     fov_aimbot_circle.Visible = SilentAimSettings.FOVAimbotEnabled
 end)
 
--- Team Target Toggle Button (dưới ESP button)
 local TeamTargetButton = Instance.new("TextButton")
 TeamTargetButton.Name = "TeamTargetButton"
 TeamTargetButton.Size = UDim2.new(0, 120, 0, 35)
@@ -1227,7 +1322,6 @@ local TeamTargetCorner = Instance.new("UICorner")
 TeamTargetCorner.CornerRadius = UDim.new(0, 6)
 TeamTargetCorner.Parent = TeamTargetButton
 
--- Silent Aim Toggle Button (góc trên bên phải)
 local SAToggle = Instance.new("TextButton")
 SAToggle.Name = "SAToggle"
 SAToggle.Size = UDim2.new(0, 50, 0, 50)
@@ -1252,7 +1346,6 @@ SAToggle.MouseButton1Click:Connect(function()
     mouse_box.Visible = SilentAimSettings.Enabled and SilentAimSettings.ShowSilentAimTarget
 end)
 
--- Priority Toggle Button (bên cạnh AIM)
 local PriorityToggle = Instance.new("TextButton")
 PriorityToggle.Name = "PriorityToggle"
 PriorityToggle.Size = UDim2.new(0, 50, 0, 50)
@@ -1283,52 +1376,10 @@ PriorityToggle.MouseButton1Click:Connect(function()
     setTargetPriority(SilentAimSettings.TargetPriority)
 end)
 
--- Focus Mode Button (góc dưới bên trái)
-local FocusModeButton = Instance.new("TextButton")
-FocusModeButton.Name = "FocusModeButton"
-FocusModeButton.Size = UDim2.new(0, 50, 0, 50)
-FocusModeButton.Position = UDim2.new(0, 10, 1, -60)
-FocusModeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-FocusModeButton.Text = "FOCUS"
-FocusModeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-FocusModeButton.TextSize = 10
-FocusModeButton.Font = Enum.Font.GothamBold
-FocusModeButton.Active = true
-FocusModeButton.Draggable = true
-FocusModeButton.Parent = ScreenGui
-
-local FocusModeCorner = Instance.new("UICorner")
-FocusModeCorner.CornerRadius = UDim.new(1, 0)
-FocusModeCorner.Parent = FocusModeButton
-
-FocusModeButton.MouseButton1Click:Connect(function()
-    if SilentAimSettings.FocusMode and SilentAimSettings.FocusedPlayer then
-        -- Unfocus current player
-        SilentAimSettings.FocusedPlayer = nil
-        FocusModeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        FocusModeButton.Text = "FOCUS"
-    else
-        -- Focus on current closest player
-        local _, currentTarget = getClosestPlayer()
-        if currentTarget then
-            SilentAimSettings.FocusMode = true
-            SilentAimSettings.FocusedPlayer = currentTarget
-            setFocusMode(true)
-            FocusModeButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-            FocusModeButton.Text = currentTarget.Name:sub(1, 5)
-        else
-            SilentAimSettings.FocusMode = not SilentAimSettings.FocusMode
-            setFocusMode(SilentAimSettings.FocusMode)
-            FocusModeButton.BackgroundColor3 = SilentAimSettings.FocusMode and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-        end
-    end
-end)
-
--- Auto Prediction Button (bên cạnh Focus)
 local AutoPredButton = Instance.new("TextButton")
 AutoPredButton.Name = "AutoPredButton"
 AutoPredButton.Size = UDim2.new(0, 50, 0, 50)
-AutoPredButton.Position = UDim2.new(0, 70, 1, -60)
+AutoPredButton.Position = UDim2.new(0, 10, 1, -60)
 AutoPredButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 AutoPredButton.Text = "AUTO\nPRED"
 AutoPredButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -1348,7 +1399,6 @@ AutoPredButton.MouseButton1Click:Connect(function()
     AutoPredButton.BackgroundColor3 = SilentAimSettings.AutoPrediction and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
 end)
 
--- Target Lock Display Button (dưới AIM và CLS/FAR)
 local TargetLockButton = Instance.new("TextButton")
 TargetLockButton.Name = "TargetLockButton"
 TargetLockButton.Size = UDim2.new(0, 170, 0, 35)
@@ -1371,7 +1421,6 @@ TargetLockCorner.Parent = TargetLockButton
 
 TargetLockButton.MouseButton1Click:Connect(function()
     if SilentAimSettings.TargetLocked then
-        -- Unlock target
         SilentAimSettings.TargetLocked = false
         SilentAimSettings.LockedTarget = nil
         TargetLockButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -1379,7 +1428,6 @@ TargetLockButton.MouseButton1Click:Connect(function()
         TargetLockButton.BorderColor3 = Color3.fromRGB(180, 180, 180)
         TargetLockButton.Text = "No Target"
     else
-        -- Lock current target - try multiple times to find a target
         local attempts = 0
         local maxAttempts = 10
         local _, currentTarget = getClosestPlayer()
@@ -1398,7 +1446,6 @@ TargetLockButton.MouseButton1Click:Connect(function()
             TargetLockButton.BorderColor3 = Color3.fromRGB(50, 200, 50)
             TargetLockButton.Text = "LOCKED: " .. currentTarget.Name
         else
-            -- No target found after attempts
             TargetLockButton.Text = "No Target Found"
             wait(1)
             TargetLockButton.Text = "No Target"
@@ -1406,12 +1453,10 @@ TargetLockButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Team Target Button Click Handler
 TeamTargetButton.MouseButton1Click:Connect(function()
     local teamsList = GetTeamsList()
     local currentIndex = 1
 
-    -- Find current team index
     for i, teamName in ipairs(teamsList) do
         if teamName == SilentAimSettings.TeamAimTarget then
             currentIndex = i
@@ -1419,7 +1464,6 @@ TeamTargetButton.MouseButton1Click:Connect(function()
         end
     end
 
-    -- Cycle to next team
     currentIndex = currentIndex + 1
     if currentIndex > #teamsList then
         currentIndex = 1
@@ -1433,7 +1477,6 @@ TeamTargetButton.MouseButton1Click:Connect(function()
         TeamTargetButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
     else
         TeamTargetButton.Text = "Team: " .. SilentAimSettings.TeamAimTarget
-        -- Try to get team color
         for _, team in pairs(Teams:GetTeams()) do
             if team.Name == SilentAimSettings.TeamAimTarget then
                 TeamTargetButton.BackgroundColor3 = team.TeamColor.Color
@@ -1443,13 +1486,11 @@ TeamTargetButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Helper functions (define before usage)
+-- ESP Helper Functions
 local function GetTeamColor(player)
     if player.Team and player.Team.TeamColor then
         local teamColor = player.Team.TeamColor.Color
-        -- Check if team color is default Roblox color (Medium stone grey - 194, 194, 194)
         if teamColor == Color3.fromRGB(194, 194, 194) or teamColor == BrickColor.new("Medium stone grey").Color then
-            -- Try to use player's name color if available
             if player.Character and player.Character:FindFirstChild("Head") and player.Character.Head:FindFirstChild("NameTag") then
                 return player.Character.Head.NameTag.TextColor3
             end
@@ -1457,7 +1498,6 @@ local function GetTeamColor(player)
         end
         return teamColor
     end
-    -- No team, use default ESP color
     return DefaultESPColor
 end
 
@@ -1466,23 +1506,18 @@ local function round(num, numDecimalPlaces)
     return math.floor(num * mult + 0.5) / mult
 end
 
--- ESP All system storage
 local ESPObjects = {}
 local lastUpdateTime = {}
 
--- Optimized ESP system using Highlight
 local function createESPForPlayer(player)
-    -- Only clean up if ESP data exists and character changed
     if ESPObjects[player] then
         local currentChar = player.Character
         local espChar = ESPObjects[player].Character
         
-        -- If same character, don't recreate
         if currentChar == espChar and ESPObjects[player].Highlight and ESPObjects[player].Highlight.Parent then
             return
         end
         
-        -- Character changed or ESP destroyed, clean up
         pcall(function()
             if ESPObjects[player].Highlight then
                 ESPObjects[player].Highlight:Destroy()
@@ -1509,10 +1544,8 @@ local function createESPForPlayer(player)
     ESPObjects[player] = {}
     ESPObjects[player].Character = Character
 
-    -- Get team color
     local teamColor = GetTeamColor(player)
 
-    -- Create Highlight for full body coverage (like ESPFull)
     local highlight = Instance.new("Highlight")
     highlight.Name = player.Name .. "_Highlight"
     highlight.Adornee = Character
@@ -1524,7 +1557,6 @@ local function createESPForPlayer(player)
 
     ESPObjects[player].Highlight = highlight
 
-    -- Create BillboardGui for info display
     local BillboardGui = Instance.new("BillboardGui")
     BillboardGui.Adornee = Head
     BillboardGui.Name = player.Name .. "_Info"
@@ -1533,7 +1565,6 @@ local function createESPForPlayer(player)
     BillboardGui.AlwaysOnTop = true
     BillboardGui.Parent = Head
 
-    -- Name label with team color
     local NameLabel = Instance.new("TextLabel")
     NameLabel.Parent = BillboardGui
     NameLabel.BackgroundTransparency = 1
@@ -1545,7 +1576,6 @@ local function createESPForPlayer(player)
     NameLabel.TextStrokeTransparency = 0.5
     NameLabel.Text = player.Name
 
-    -- HP label
     local HPLabel = Instance.new("TextLabel")
     HPLabel.Parent = BillboardGui
     HPLabel.BackgroundTransparency = 1
@@ -1557,7 +1587,6 @@ local function createESPForPlayer(player)
     HPLabel.TextStrokeTransparency = 0.5
     HPLabel.Text = "HP: " .. round(Humanoid.Health, 1)
 
-    -- Distance label
     local DistLabel = Instance.new("TextLabel")
     DistLabel.Parent = BillboardGui
     DistLabel.BackgroundTransparency = 1
@@ -1576,25 +1605,20 @@ local function createESPForPlayer(player)
 
     lastUpdateTime[player] = 0
     
-    -- Handle character death/respawn
     ESPObjects[player].CharacterAddedConnection = player.CharacterAdded:Connect(function(newCharacter)
         if ESPAllEnabled then
-            -- Wait for character to fully load
             wait(0.5)
             createESPForPlayer(player)
         end
     end)
 end
 
--- Cleanup on player leaving
 Players.PlayerRemoving:Connect(function(p)
-    -- Clear locked target if it's this player
     if SilentAimSettings.LockedTarget == p then
         SilentAimSettings.TargetLocked = false
         SilentAimSettings.LockedTarget = nil
     end
 
-    -- Remove ESP
     if ESPObjects[p] then
         pcall(function()
             if ESPObjects[p].Highlight then
@@ -1612,11 +1636,9 @@ Players.PlayerRemoving:Connect(function(p)
     lastUpdateTime[p] = nil
 end)
 
--- Handle new players joining and existing players
 local function setupPlayerESP(player)
     if player == LocalPlayer then return end
     
-    -- Handle initial character if exists
     if player.Character then
         spawn(function()
             wait(0.5)
@@ -1626,10 +1648,8 @@ local function setupPlayerESP(player)
         end)
     end
     
-    -- Handle future character spawns
     player.CharacterAdded:Connect(function(character)
         if ESPAllEnabled then
-            -- Use spawn to avoid blocking and retry logic
             spawn(function()
                 local attempts = 0
                 local maxAttempts = 15
@@ -1637,7 +1657,6 @@ local function setupPlayerESP(player)
                 while attempts < maxAttempts do
                     wait(0.2)
                     
-                    -- Check if character is fully loaded
                     local humanoid = FindFirstChild(character, "Humanoid")
                     local rootPart = FindFirstChild(character, "HumanoidRootPart")
                     local head = FindFirstChild(character, "Head")
@@ -1654,61 +1673,36 @@ local function setupPlayerESP(player)
     end)
 end
 
--- Setup ESP for all existing players
 for _, player in pairs(GetPlayers(Players)) do
     setupPlayerESP(player)
 end
 
--- Handle new players joining
 Players.PlayerAdded:Connect(function(player)
     setupPlayerESP(player)
 end)
 
 --[[
-    ═══════════════════════════════════════════════════════════
-                        RENDER LOOP
-    ═══════════════════════════════════════════════════════════
+    RENDER LOOP
 ]]
 
 resume(create(function()
     RenderStepped:Connect(function()
-        -- Update button colors
         SAToggle.BackgroundColor3 = SilentAimSettings.Enabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
         FOVToggle.BackgroundColor3 = SilentAimSettings.FOVAimbotEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
         ESPToggle.BackgroundColor3 = ESPAllEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
         AutoPredButton.BackgroundColor3 = SilentAimSettings.AutoPrediction and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-        
-        -- Update Focus Mode button
-        if SilentAimSettings.FocusedPlayer then
-            FocusModeButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-            if SilentAimSettings.FocusedPlayer.Parent then
-                FocusModeButton.Text = SilentAimSettings.FocusedPlayer.Name:sub(1, 5)
-            else
-                SilentAimSettings.FocusedPlayer = nil
-                FocusModeButton.Text = "FOCUS"
-                FocusModeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-            end
-        else
-            FocusModeButton.BackgroundColor3 = SilentAimSettings.FocusMode and Color3.fromRGB(255, 165, 0) or Color3.fromRGB(200, 50, 50)
-            if not SilentAimSettings.FocusMode then
-                FocusModeButton.Text = "FOCUS"
-            end
-        end
 
-        -- FOV Aimbot (Camera Lock) logic
         if SilentAimSettings.FOVAimbotEnabled then
             local aimbotTarget, aimbotTargetPlayer = getClosestPlayerForAimbot()
             if aimbotTarget and aimbotTargetPlayer then
                 local aimPos = aimbotTarget.Position
                 local rootPart = FindFirstChild(aimbotTargetPlayer.Character, "HumanoidRootPart")
 
-                -- Add prediction
                 if rootPart then
                     local velocity = rootPart.Velocity
                     aimPos = aimbotTarget.Position + (velocity * 0.1)
                 end
 
-                -- Smooth camera lock
                 local currentCF = Camera.CFrame
                 local targetDirection = (aimPos - currentCF.Position).Unit
                 local newLookVector = currentCF.LookVector:Lerp(targetDirection, SilentAimSettings.FOVAimbotSmoothness)
@@ -1716,7 +1710,6 @@ resume(create(function()
             end
         end
 
-        -- Update target lock button and target box/ESP
         local currentTarget, currentTargetPlayer = getClosestPlayer()
         if currentTargetPlayer then
             if SilentAimSettings.TargetLocked then
@@ -1730,7 +1723,6 @@ resume(create(function()
             end
         end
         
-        -- Update target box and ESP for current target
         if SilentAimSettings.ShowSilentAimTarget and SilentAimSettings.Enabled then
             local target, targetPlayer = getClosestPlayer()
             if target and targetPlayer then
@@ -1745,35 +1737,27 @@ resume(create(function()
                         local HeadPos2D, OnScreen1 = WorldToViewportPoint(Camera, Head.Position)
                         local RootPos2D, OnScreen2 = WorldToViewportPoint(Camera, HumanoidRootPart.Position)
                         
-                        -- Update mouse box
                         mouse_box.Visible = IsOnScreen
                         mouse_box.Position = Vector2.new(RootToViewportPoint.X, RootToViewportPoint.Y)
                         
-                        -- Update ESP
                         if OnScreen1 and OnScreen2 then
-                            -- Calculate distance
                             local distance = math.floor((Camera.CFrame.Position - HumanoidRootPart.Position).Magnitude)
                             
-                            -- Calculate box size
                             local height = math.abs(HeadPos2D.Y - RootPos2D.Y) * 1.2
                             local width = height / 2
                             
-                            -- Update bounding box
                             esp_box.Size = Vector2.new(width, height)
                             esp_box.Position = Vector2.new(RootPos2D.X - width/2, RootPos2D.Y - height/2)
                             esp_box.Visible = true
                             
-                            -- Update name tag
                             esp_name.Text = targetPlayer.Name
                             esp_name.Position = Vector2.new(HeadPos2D.X, HeadPos2D.Y - 30)
                             esp_name.Visible = true
                             
-                            -- Update distance tag
                             esp_distance.Text = distance .. "m"
                             esp_distance.Position = Vector2.new(RootPos2D.X, RootPos2D.Y + height/2 + 15)
                             esp_distance.Visible = true
                             
-                            -- Update tracer from center of screen to player
                             esp_tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
                             esp_tracer.To = Vector2.new(RootPos2D.X, RootPos2D.Y)
                             esp_tracer.Visible = true
@@ -1812,21 +1796,17 @@ resume(create(function()
             esp_tracer.Visible = false
         end
 
-        -- ESP All system (optimized with Highlight)
         if ESPAllEnabled then
             local currentTime = tick()
 
             for _, player in pairs(GetPlayers(Players)) do
                 if player ~= LocalPlayer then
-                    -- Check team filters
                     local shouldESP = true
 
-                    -- Team check filter
                     if SilentAimSettings.TeamCheck and player.Team == LocalPlayer.Team then
                         shouldESP = false
                     end
 
-                    -- Team aim target filter
                     if SilentAimSettings.TeamAimTarget ~= "None" then
                         if not player.Team or player.Team.Name ~= SilentAimSettings.TeamAimTarget then
                             shouldESP = false
@@ -1840,9 +1820,7 @@ resume(create(function()
                         local HumanoidRootPart = FindFirstChild(Character, "HumanoidRootPart")
                         local Head = FindFirstChild(Character, "Head")
 
-                        -- Create ESP if doesn't exist or character changed
                         if Humanoid and HumanoidRootPart and Head and Humanoid.Health > 0 then
-                            -- Check if ESP needs to be created/recreated
                             local needsRecreate = false
                             if not ESPObjects[player] then
                                 needsRecreate = true
@@ -1855,7 +1833,6 @@ resume(create(function()
                             if needsRecreate then
                                 createESPForPlayer(player)
                             else
-                                -- Update existing ESP
                                 local teamColor = GetTeamColor(player)
                                 if ESPObjects[player].Highlight then
                                     ESPObjects[player].Highlight.FillColor = teamColor
@@ -1865,11 +1842,9 @@ resume(create(function()
                                     ESPObjects[player].NameLabel.TextColor3 = teamColor
                                 end
 
-                                -- Throttle updates to 0.1 second intervals
                                 if not lastUpdateTime[player] or (currentTime - lastUpdateTime[player]) >= 0.1 then
                                     lastUpdateTime[player] = currentTime
 
-                                    -- Update HP
                                     if ESPObjects[player].HPLabel then
                                         ESPObjects[player].HPLabel.Text = "HP: " .. round(Humanoid.Health, 1)
 
@@ -1883,7 +1858,6 @@ resume(create(function()
                                         end
                                     end
 
-                                    -- Update distance
                                     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and ESPObjects[player].DistLabel then
                                         local dist = (LocalPlayer.Character.HumanoidRootPart.Position - HumanoidRootPart.Position).Magnitude
                                         ESPObjects[player].DistLabel.Text = round(dist, 0) .. "m"
@@ -1891,9 +1865,7 @@ resume(create(function()
                                 end
                             end
                         end
-                        -- Don't remove ESP when player dies, let CharacterAdded handle respawn
                     else
-                        -- Should not ESP this player, remove if exists
                         if ESPObjects[player] then
                             pcall(function()
                                 if ESPObjects[player].Highlight then
@@ -1913,7 +1885,6 @@ resume(create(function()
                 end
             end
         else
-            -- ESP disabled, cleanup all
             for player, data in pairs(ESPObjects) do
                 pcall(function()
                     if data.Highlight then
@@ -1933,10 +1904,8 @@ resume(create(function()
             end
         end
 
-        -- Update FOV circles
         local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
-        -- Silent Aim FOV circle
         if SilentAimSettings.FOVVisible then
             fov_circle.Visible = true
             fov_circle.Radius = SilentAimSettings.FOVRadius
@@ -1945,7 +1914,6 @@ resume(create(function()
             fov_circle.Visible = false
         end
 
-        -- FOV Aimbot circle (orange)
         if SilentAimSettings.FOVAimbotEnabled then
             fov_aimbot_circle.Visible = true
             fov_aimbot_circle.Radius = SilentAimSettings.FOVAimbotRadius
@@ -1957,67 +1925,38 @@ resume(create(function()
 end))
 
 --[[
-    ═══════════════════════════════════════════════════════════
-                            HOOKS
-    ═══════════════════════════════════════════════════════════
+    ADVANCED HOOKS SYSTEM
 ]]
 
--- hooks
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(...)
     local Method = getnamecallmethod()
     local Arguments = {...}
     local self = Arguments[1]
     local chance = CalculateChance(SilentAimSettings.HitChance)
+    
     if SilentAimSettings.Enabled and self == workspace and not checkcaller() and chance == true then
-        if Method == "FindPartOnRayWithIgnoreList" and SilentAimSettings.SilentAimMethod == Method then
-            if ValidateArguments(Arguments, ExpectedArguments.FindPartOnRayWithIgnoreList) then
-                local A_Ray = Arguments[2]
-
+        local isEnabled, realMethod = IsMethodEnabled(Method)
+        
+        if isEnabled and realMethod then
+            local expectedArgs = ExpectedArguments[realMethod]
+            
+            if expectedArgs and ValidateArguments(Arguments, expectedArgs) then
                 local HitPart = getClosestPlayer()
+                
                 if HitPart then
-                    local Origin = A_Ray.Origin
-                    local Direction = getDirection(Origin, HitPart.Position)
-                    Arguments[2] = Ray.new(Origin, Direction)
-
-                    return oldNamecall(unpack(Arguments))
-                end
-            end
-        elseif Method == "FindPartOnRayWithWhitelist" and SilentAimSettings.SilentAimMethod == Method then
-            if ValidateArguments(Arguments, ExpectedArguments.FindPartOnRayWithWhitelist) then
-                local A_Ray = Arguments[2]
-
-                local HitPart = getClosestPlayer()
-                if HitPart then
-                    local Origin = A_Ray.Origin
-                    local Direction = getDirection(Origin, HitPart.Position)
-                    Arguments[2] = Ray.new(Origin, Direction)
-
-                    return oldNamecall(unpack(Arguments))
-                end
-            end
-        elseif (Method == "FindPartOnRay" or Method == "findPartOnRay") and SilentAimSettings.SilentAimMethod:lower() == Method:lower() then
-            if ValidateArguments(Arguments, ExpectedArguments.FindPartOnRay) then
-                local A_Ray = Arguments[2]
-
-                local HitPart = getClosestPlayer()
-                if HitPart then
-                    local Origin = A_Ray.Origin
-                    local Direction = getDirection(Origin, HitPart.Position)
-                    Arguments[2] = Ray.new(Origin, Direction)
-
-                    return oldNamecall(unpack(Arguments))
-                end
-            end
-        elseif Method == "Raycast" and SilentAimSettings.SilentAimMethod == Method then
-            if ValidateArguments(Arguments, ExpectedArguments.Raycast) then
-                local A_Origin = Arguments[2]
-
-                local HitPart = getClosestPlayer()
-                if HitPart then
-                    Arguments[3] = getDirection(A_Origin, HitPart.Position)
-
-                    return oldNamecall(unpack(Arguments))
+                    if realMethod == "Raycast" then
+                        local A_Origin = Arguments[2]
+                        Arguments[3] = getDirection(A_Origin, HitPart.Position)
+                        return oldNamecall(unpack(Arguments))
+                    else
+                        -- FindPartOnRay variants
+                        local A_Ray = Arguments[2]
+                        local Origin = A_Ray.Origin
+                        local Direction = getDirection(Origin, HitPart.Position)
+                        Arguments[2] = Ray.new(Origin, Direction)
+                        return oldNamecall(unpack(Arguments))
+                    end
                 end
             end
         end
@@ -2027,39 +1966,36 @@ end))
 
 local oldIndex = nil
 oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, Index)
-    if self == Mouse and not checkcaller() and SilentAimSettings.Enabled and SilentAimSettings.SilentAimMethod == "Mouse.Hit/Target" and getClosestPlayer() then
+    if self == Mouse and not checkcaller() and SilentAimSettings.Enabled then
         local HitPart = getClosestPlayer()
-
-        if Index == "Target" or Index == "target" then
-            return HitPart
-        elseif Index == "Hit" or Index == "hit" then
-            -- Calculate prediction with multiplier
-            local predAmount = PredictionAmount * SilentAimSettings.PredictionMultiplier
+        
+        if HitPart then
+            local isEnabled, realMethod = IsMethodEnabled(Index)
             
-            -- Auto prediction based on ping
-            if SilentAimSettings.AutoPrediction then
-                local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
-                predAmount = predAmount * (1 + (ping / 1000))
+            if isEnabled and realMethod then
+                if realMethod == "Target" then
+                    return HitPart
+                elseif realMethod == "Hit" then
+                    local predAmount = PredictionAmount * SilentAimSettings.PredictionMultiplier
+                    
+                    if SilentAimSettings.AutoPrediction then
+                        local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+                        predAmount = predAmount * (1 + (ping / 1000))
+                    end
+                    
+                    return ((SilentAimSettings.MouseHitPrediction and (HitPart.CFrame + (HitPart.Velocity * predAmount))) or (not SilentAimSettings.MouseHitPrediction and HitPart.CFrame))
+                elseif realMethod == "X" or realMethod == "Y" then
+                    return self[Index]
+                elseif realMethod == "UnitRay" then
+                    return Ray.new(self.Origin, (self.Hit - self.Origin).Unit)
+                end
             end
-            
-            return ((SilentAimSettings.MouseHitPrediction and (HitPart.CFrame + (HitPart.Velocity * predAmount))) or (not SilentAimSettings.MouseHitPrediction and HitPart.CFrame))
-        elseif Index == "X" or Index == "x" then
-            return self.X
-        elseif Index == "Y" or Index == "y" then
-            return self.Y
-        elseif Index == "UnitRay" then
-            return Ray.new(self.Origin, (self.Hit - self.Origin).Unit)
         end
     end
 
     return oldIndex(self, Index)
 end))
 
-print("[Silent Aim] Mobile-optimized GUI loaded!")
-print("[Silent Aim] Tap 'GUI' button to open menu")
-print("[Silent Aim] Tap 'AIM' button to toggle Silent Aim")
-print("[Silent Aim] Tap 'CLS/FAR' button to toggle target priority")
-print("[Silent Aim] Tap 'FOV' button to toggle FOV Aimbot")
-print("[Silent Aim] Tap 'Team' button to cycle team targeting")
-print("[Silent Aim] Tap 'FOCUS' button to focus on a target")
-print("[Silent Aim] Tap 'AUTO PRED' button to toggle auto prediction")
+print("[Silent Aim Advanced] Loaded successfully!")
+print("[Features] Multi-method support, Whitelist mode, Advanced validation, Custom CFrame modifier")
+print("[Controls] Tap buttons to toggle features")
